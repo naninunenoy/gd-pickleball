@@ -40,11 +40,12 @@ func _ready() -> void:
 	court_view.map = map
 	_spawn_world()
 	help_label.text = "\n".join([
-		"WASD / スティック  打ち先",
-		"矢印 / 十字  球種",
-		"Space / A  サーブ・再戦",
+		"WASD / stick  aim",
+		"Arrows / D-pad  shot",
+		"Space / A  serve, rematch",
 		"",
-		"移動は自動。近い方が打つ。",
+		"Movement is automatic.",
+		"Closest player hits.",
 	])
 	_start_match()
 
@@ -222,13 +223,13 @@ func _update_rally(delta: float) -> void:
 	_move_live_athletes(delta)
 	ball.advance(delta)
 	if ball.just_net:
-		_end_point(not last_hitter_human, "ネット")
+		_end_point(not last_hitter_human, "Net")
 		return
 	if ball.just_first_bounce:
 		if not _bounce_is_legal(ball.ground_pos):
 			return
 	if ball.just_second_bounce:
-		_end_point(last_hitter_human, "ツーバウンド")
+		_end_point(last_hitter_human, "Double bounce")
 		return
 	_try_contact()
 
@@ -236,11 +237,11 @@ func _update_rally(delta: float) -> void:
 func _bounce_is_legal(pos: Vector2) -> bool:
 	if hits_completed == 1:
 		if not MatchRules.inclusive_in_rect(pos, _serve_box()):
-			_end_point(not last_hitter_human, "サービスフォルト")
+			_end_point(not last_hitter_human, "Service fault")
 			return false
 		return true
 	if not MatchRules.is_in_court(pos):
-		_end_point(not last_hitter_human, "アウト")
+		_end_point(not last_hitter_human, "Out")
 		return false
 	return true
 
@@ -300,7 +301,7 @@ func _try_contact() -> void:
 		var want_volley := defending_human and armed == ShotCatalog.Id.VOLLEY and MatchRules.volley_legal(hits_completed)
 		if want_volley and hitter.can_reach(ball.ground_pos):
 			if hitter.in_nvz():
-				_end_point(not defending_human, "キッチンボレー")
+				_end_point(not defending_human, "Kitchen volley")
 				return
 			_human_or_ai_hit(hitter, true)
 		return
@@ -325,7 +326,7 @@ func _human_or_ai_hit(hitter: Athlete, in_air: bool) -> void:
 func _execute_hit(hitter: Athlete, shot: int, target: Vector2, _in_air: bool) -> void:
 	if not MatchRules.crosses_net(hitter.court_pos, target):
 		last_hitter_human = hitter.is_human()
-		_end_point(not hitter.is_human(), "ネット")
+		_end_point(not hitter.is_human(), "Net")
 		return
 	var start_h := ShotCatalog.start_height(shot, ball.height)
 	ball.launch(hitter.court_pos, start_h, target, shot)
@@ -382,31 +383,31 @@ func _sync_visuals() -> void:
 
 
 func _update_ui() -> void:
-	score_label.text = "あなた  %d  -  %d  相手" % [human_score, cpu_score]
+	score_label.text = "You  %d  -  %d  CPU" % [human_score, cpu_score]
 	reason_label.text = point_reason
 	if phase == Phase.MATCH_END:
-		var winner := "あなたの勝ち" if human_score > cpu_score else "相手の勝ち"
-		status_label.text = "試合終了  %s\nSpace で再戦" % winner
+		var winner := "You win" if human_score > cpu_score else "CPU wins"
+		status_label.text = "Match over  %s\nSpace to rematch" % winner
 	elif phase == Phase.SERVE_AIM:
-		var who := "あなたのサーブ" if human_serving else "相手のサーブ"
-		status_label.text = "%s\n対角のボックスへ" % who
+		var who := "Your serve" if human_serving else "CPU serve"
+		status_label.text = "%s\nAim the diagonal box" % who
 	elif phase == Phase.POINT_END:
-		var who := "あなた" if human_serving else "相手"
-		status_label.text = "%s\n次は%sのサーブ" % [point_reason, who]
+		var who := "you" if human_serving else "CPU"
+		status_label.text = "%s\nNext serve: %s" % [point_reason, who]
 	elif not MatchRules.volley_legal(hits_completed):
-		status_label.text = "バウンド待ち\nダブルバウンド"
+		status_label.text = "Let it bounce\nDouble bounce"
 	else:
 		var def_human := not last_hitter_human
 		var hitter := _pick_hitter(def_human, _contact_point(def_human))
 		if def_human and hitter.in_nvz():
-			status_label.text = "NVZ\nボレー禁止"
+			status_label.text = "NVZ\nNo volley"
 		else:
-			status_label.text = "ボレー可"
-	var lines: PackedStringArray = ["球種"]
-	lines.append(_shot_row(ShotCatalog.Id.DRIVE, "↑ 北", "ドライブ"))
-	lines.append(_shot_row(ShotCatalog.Id.DROP, "↓ 南", "ドロップ / ディング"))
-	lines.append(_shot_row(ShotCatalog.Id.VOLLEY, "→ 東", "ボレー"))
-	lines.append(_shot_row(ShotCatalog.Id.SMASH, "← 西", "スマッシュ"))
+			status_label.text = "Volley OK"
+	var lines: PackedStringArray = ["Shots"]
+	lines.append(_shot_row(ShotCatalog.Id.DRIVE, "Up", "Drive"))
+	lines.append(_shot_row(ShotCatalog.Id.DROP, "Down", "Drop / Dink"))
+	lines.append(_shot_row(ShotCatalog.Id.VOLLEY, "Right", "Volley"))
+	lines.append(_shot_row(ShotCatalog.Id.SMASH, "Left", "Smash"))
 	shots_label.text = "\n".join(lines)
 
 

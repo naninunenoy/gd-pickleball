@@ -1,155 +1,157 @@
-# 実装メモ（AI / 開発者向け）
+# Implementation notes
 
-人間向けルールは `docs/rules.md` を正とする。挙動を変えたら、先に `rules.md` を更新してからコードを合わせる。このファイルは内部構造と、次に足してはいけないもののメモ。
+`docs/rules.md` is the player-facing source of truth. If behavior changes, update `rules.md` first, then match the code. This file is internals and a list of things not to add yet.
 
-## 今の縦スライスが証明すること
+All in-game strings must stay English. Godot's default font does not cover Japanese.
 
-- 自チーム 2 人は一括操作。WASD は移動ではなく着弾点
-- 東西南北は球種。接触は自動
-- 近い方が打つ。相方は半面を守る
-- ダブルバウンドと NVZ ボレー禁止を最初から入れる
-- 相手 AI は「返すだけ」
-- ラリーポイントで 11 点先取
+## What this slice must prove
 
-## ディレクトリ
+- Both partners are controlled as a team. WASD aims the landing, it does not move a player
+- NESW is shot type. Contact is automatic
+- Closest player hits. Partner covers the open half
+- Double bounce and NVZ volley faults are in from the start
+- Opponent AI only returns
+- Rally scoring, first to 11
 
-```
-docs/rules.md              人間向けルール
-docs/implementation.md     このメモ
-scripts/court_map.gd       座標変換。画面サイズに依存
-scripts/match_rules.gd     コート幾何と合法判定。画面に依存しない
-scripts/shot_catalog.gd    球種パラメータ
-scripts/athlete.gd         1 選手。court_pos はフィート
-scripts/ball.gd            着地点ベースの飛行。物理エンジンは使わない
-scripts/court_view.gd      コート描画
-scripts/reticle.gd         着弾レティクル
-scripts/main.gd            試合進行。入力、担当、AI、得点
-scripts/check_slice.gd     ヘッドレス健全性チェック
-scenes/main.tscn           エントリ
-```
-
-新しい球種やルールを足すときは `match_rules.gd` / `shot_catalog.gd` に寄せる。`main.gd` にマジックナンバーを増やさない。
-
-## 座標系
-
-単位はフィート。描画だけピクセルに変換する。
-
-- `x = 0` 左サイドライン、`x = 20` 右サイドライン
-- `y = 0` 上（CPU）ベースライン、`y = 44` 下（プレイヤー）ベースライン
-- ネット `y = 22`
-- CPU 側 NVZ: `y = 15 .. 22`
-- プレイヤー側 NVZ: `y = 22 .. 29`
-- サービスボックスはベースラインから NVZ ラインまで 15 ft、左右 10 ft
-- ライン上はイン。`Rect2.has_point` は遠辺が半開なので使わない
-
-プレイヤーは常に南（画面下）。サイドチェンジは未実装。上下を入れ替えるな。
-
-CPU から見た「右」は画面左（`x < 10`）。サーバー位置の偶数・奇数は各チームの得点で見る。
+## Layout
 
 ```
-人間 偶数点: 画面右がサーブ、狙い = 上コート左ボックス
-人間 奇数点: 画面左がサーブ、狙い = 上コート右ボックス
-CPU  偶数点: CPU の右 = 画面左がサーブ、狙い = 下コート右ボックス
-CPU  奇数点: CPU の左 = 画面右がサーブ、狙い = 下コート左ボックス
+docs/rules.md              player-facing rules
+docs/implementation.md     this note
+scripts/court_map.gd       feet to pixels
+scripts/match_rules.gd     court geometry and legality, view-independent
+scripts/shot_catalog.gd    shot parameters
+scripts/athlete.gd         one player; court_pos is feet
+scripts/ball.gd            landing-based flight, no physics engine
+scripts/court_view.gd      court draw
+scripts/reticle.gd         aim reticle
+scripts/main.gd            match flow, input, AI, scoring
+scripts/check_slice.gd     headless sanity checks
+scenes/main.tscn           entry
 ```
 
-## 状態
+New shots or rules belong in `match_rules.gd` / `shot_catalog.gd`. Do not pile magic numbers into `main.gd`.
 
-`main.gd` の `Phase`:
+## Coordinates
 
-1. `SERVE_AIM` — レティクルで狙い、人間は Space で打つ。CPU は短い待ちのあと自動
-2. `IN_FLIGHT` — 飛行またはワンバウンド後。接触で打ち直し
-3. `POINT_END` — 理由を出して約 1.4 秒
-4. `MATCH_END` — 11 点。Space で再戦
+Units are feet. Pixels are for drawing only.
 
-`hits_completed` は合法に打ち出した回数。
+- `x = 0` left sideline, `x = 20` right sideline
+- `y = 0` top (CPU) baseline, `y = 44` bottom (player) baseline
+- Net `y = 22`
+- CPU NVZ: `y = 15 .. 22`
+- Player NVZ: `y = 22 .. 29`
+- Service boxes run 15 ft from baseline to NVZ line, 10 ft wide
+- Lines are in. Do not use `Rect2.has_point`; the far edge is half-open
 
-- 1 球目（サーブ）と 2 球目（リターン）はボレー禁止
-- `hits_completed >= 3` の来球からボレー可
+The player team is always south (bottom of the screen). Side change is not implemented. Do not swap ends.
 
-ダブルバウンド中にボレーが選ばれていても、空中接触は起こさない（待ってバウンド後に打つ）。キッチン内ボレーだけは、ボレー可の局面で空中接触するとフォルト。
+CPU "right" is screen left (`x < 10`). Even/odd server side uses that team's own score.
 
-## 入力
+```
+Human even: screen-right serves, target = north-left box
+Human odd:  screen-left serves, target = north-right box
+CPU even:   CPU right = screen left serves, target = south-right box
+CPU odd:    CPU left = screen right serves, target = south-left box
+```
 
-入力マップは `main.gd` の `_ensure_actions()` で登録する。`project.godot` の Input Map には依存しない。
+## State
 
-| action | 役割 |
+`main.gd` `Phase`:
+
+1. `SERVE_AIM` — aim with the reticle. Human serves with Space. CPU serves after a short wait
+2. `IN_FLIGHT` — flight or first bounce. Contact starts the next shot
+3. `POINT_END` — show the reason for about 1.4s
+4. `MATCH_END` — 11 points. Space rematches
+
+`hits_completed` is the number of legal outbound hits.
+
+- Shot 1 (serve) and shot 2 (return) cannot be volleyed
+- Incoming balls with `hits_completed >= 3` can be volleyed
+
+If volley is selected during the double-bounce window, do not take it in the air; wait for the bounce. A kitchen volley is a fault only when volleys are otherwise legal and contact happens in the air in the NVZ.
+
+## Input
+
+Actions are registered in `main.gd` `_ensure_actions()`. Do not depend on the `project.godot` Input Map.
+
+| action | role |
 |---|---|
-| `aim_*` | レティクル。選手移動に使うな |
-| `shot_north/south/east/west` | 球種の武装。sticky |
-| `confirm` | サーブと再戦だけ |
+| `aim_*` | reticle. Do not use this to move athletes |
+| `shot_north/south/east/west` | armed shot, sticky |
+| `confirm` | serve and rematch only |
 
-打者トグル用に `toggle_hitter` を予約してあるが、読んで無視する。タイミング窓も足すな。
+`toggle_hitter` is reserved and ignored. Do not add a timing window.
 
-未選択時の球種はドライブ。`VOLLEY` のままバウンド後に接触したらドライブ（パンチ）扱い。`SMASH` で高さ不足もドライブ。
+Default shot is drive. `VOLLEY` after a bounce becomes a drive (punch). `SMASH` without height becomes a drive.
 
-## ボール
+## Ball
 
-物理エンジン（Jolt / Godot Physics）は使わない。`RallyBall` は始点・着点・時間・山の高さだけ持つ。
+Do not use Jolt / Godot Physics for the ball. `RallyBall` stores start, land, duration, and apex.
 
 ```
 ground(t) = lerp(start, land, u)
 height(t) = lerp(h0, h1, u) + 4 * apex_extra * u * (1 - u)
 ```
 
-ワンバウンド後は短いバウンド軌道に入る。ツーバウンドで守備側の失点。到達速度に上限があるので、ウィナーが成立する。
+After the first bounce, a short bounce arc runs. Second bounce is a defensive loss. Move speed is capped, so winners can exist.
 
-ネット判定は、軌道が `y = 22` を越えるフレームで `height < 3.0` ならフォルト。同じ側に着地する狙いもフォルト。
+Net fault: on the frame the path crosses `y = 22`, `height < 3.0`. Aiming to the same side of the net is also a fault.
 
-## 自動移動
+## Auto movement
 
-- 守備チームの打者だけが接触点へ走る
-- 相方はホーム（後ろ、または NVZ ライン）へ
-- `hits_completed < 2` のあいだ全員後ろ
-- それ以降、打っていない側は NVZ ラインへ出る
-- 速度 `Athlete.MOVE_SPEED`、リーチ `Athlete.REACH`
-- 中央は距離がほぼ同じなら、ホームサイド（左は左）を優先
+- Only the defending hitter runs to the contact point
+- Partner goes home (back or NVZ line)
+- Everyone stays back while `hits_completed < 2`
+- After that, the off-ball player steps to the NVZ line
+- Speed `Athlete.MOVE_SPEED`, reach `Athlete.REACH`
+- If distances are nearly equal, prefer the home side (left stays left)
 
-打者トグルは次のスライス。今は近い方固定。
+Hitter toggle is the next slice. Closest player only for now.
 
-## 相手 AI
+## Opponent AI
 
-返すだけ。
+Return only.
 
-- 着弾点は相手コート中央付近（小さな乱数のみ）
-- 自分の `y` が NVZ 寄りならドロップ、それ以外はドライブ
-- ボレーしない。バウンドを待つ
-- ポーチ、空き狙い、強弱の読みは書くな
+- Land near the center of the opponent court (small jitter)
+- Drop if standing near the NVZ, otherwise drive
+- Do not volley. Wait for the bounce
+- Do not poach, hunt gaps, or vary pace on purpose
 
-## 画面
+## HUD
 
-必須表示:
+Required:
 
-- コートと NVZ
-- 4 人、打者リング
-- ボール、影、予測着地
-- レティクル（枠内は緑、アウトは赤）
-- スコア、制約（バウンド待ち / ボレー可 / NVZ）
-- 東西南北の球種
+- Court and NVZ
+- Four players, hitter ring
+- Ball, shadow, predicted land
+- Reticle (green in, red out)
+- Score and constraint (let it bounce / volley OK / NVZ)
+- Shot labels
 
-## 次に足してよいもの / 今足すな
+## Add later / do not add now
 
-足してよい（別スライス）:
+OK in a later slice:
 
-- 打者トグル（予約アクション `toggle_hitter`）
-- 薄いタイミング窓
-- サイドチェンジ、サイドアウト、2 点差
-- ロブ
-- 相手の狙いを少しずらす
+- Hitter toggle (`toggle_hitter`)
+- A light timing window
+- Side change, side-out, win-by-2
+- Lob
+- Slight opponent aim variation
 
-今足すな:
+Do not add now:
 
-- WASD で選手を動かす
-- 球種ボタンで着地点を決める
-- 物理エンジンでボールを飛ばす
-- 公式サーバー 2 人制を中途半端に入れる
-- キャラ性能差、スタミナ、ゲージ
+- WASD moving athletes
+- Shot buttons choosing the landing
+- Physics-engine ball flight
+- Official two-server rotation halfway
+- Character stats, stamina, gauges
 
-## 確認
+## Checks
 
 ```bash
 godot --headless --path . -s res://scripts/check_slice.gd
 godot --headless --path . --quit-after 720 -- --auto-rally
 ```
 
-Web 出しは従来どおり `./scripts/export_web.sh`。
+Web export is still `./scripts/export_web.sh`.

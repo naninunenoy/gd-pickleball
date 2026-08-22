@@ -1,95 +1,95 @@
-# ピックルボール ダブルス（縦スライス）ルール
+# Pickleball doubles (vertical slice) rules
 
-プレイヤー向けの確定事項です。操作と勝敗の決め方だけを書きます。実装の内部は `docs/implementation.md` を見てください。
+Player-facing rules only. Implementation internals live in `docs/implementation.md`.
 
-この版はフルゲームではありません。サーブからラリーを繰り返し、先に 11 点取った側が勝ちます。
+This version is not a full game. It repeats serve-to-rally points. First to 11 wins.
 
-## 操作
+## Controls
 
-あなたは下コートの 2 人を同時に操作します。キャラを直接歩きません。
+You control both players on the bottom court at once. You do not walk a character directly.
 
-| 入力 | 意味 |
+| Input | Meaning |
 |---|---|
-| WASD / 左スティック | ボールを打つ先（着弾点）を動かす |
-| ↑ 北 | ドライブ（長く、速く、低く） |
-| ↓ 南 | ドロップ / ディング（短く、遅く、山なり） |
-| → 東 | ボレー（空中で取る。できないときは使われない） |
-| ← 西 | スマッシュ（高い球だけ。低ければドライブになる） |
-| Space / Enter / ゲームパッド A | サーブを打つ。試合終了後は再開 |
+| WASD / left stick | Aim where the ball will land |
+| Up | Drive (long, fast, low) |
+| Down | Drop / dink (short, slow, arcing) |
+| Right | Volley (take it out of the air when legal) |
+| Left | Smash (high balls only; otherwise becomes a drive) |
+| Space / Enter / gamepad A | Serve. After the match, rematch |
 
-東西南北は「どこへ」ではなく「どう打つか」です。打ち先は移動キー側です。
+NESW is how you hit, not where. Aim is on the movement keys.
 
-球種は最後に選んだものが残ります。最初はドライブです。接触した瞬間、その球種でレティクルへ飛びます。打ち出しのタイミング操作はありません。
+The last chosen shot stays selected. Default is drive. On contact, that shot flies toward the reticle. There is no timing window.
 
-## 2 人の動き
+## Two-player movement
 
-- ボールへの移動は自動です
-- 基本は、予測される接触点に近い方が打ちます
-- 打たない側は、空いている半面を守ります
-- サーブとリターンが終わるまでは後ろに残ります
-- それ以降は、空いている側がキッチンラインへ出ます
+- Movement to the ball is automatic
+- The closer player takes the ball
+- The partner covers the open half
+- Both stay back until serve and return are done
+- After that, the off-ball player moves up to the kitchen line
 
-誰が打つかの切り替え、コートエンドの交代はまだありません。左の人は左、右の人は右に居続けます。
+Hitter toggle and changing ends are not in this slice. Left stays left, right stays right.
 
-## 試合
+## Match
 
-- 1 ラリーごとに必ず 1 点が入ります
-- 先に 11 点で終了です。2 点差は使いません
-- あなたが先にサーブします
-- ポイントを取った側が、次のポイントでサーブします
-- サーバーは、そのチームの得点が偶数なら右、奇数なら左に立ちます
-- コートの上下入れ替えはありません
+- Every rally is worth 1 point
+- First to 11 wins. No win-by-2
+- You serve first
+- The team that won the point serves next
+- Even score: serve from the right. Odd score: serve from the left
+- Teams do not switch ends
 
-## サーブ
+## Serve
 
-- 対角のサービスボックスを狙います
-- レティクルが枠の外ならフォルトです
-- ネットを越えない、またはコートに入らない場合もフォルトです
-- 受けた側は、ワンバウンドさせてから返します
+- Aim the diagonal service box
+- Reticle outside the box is a fault
+- Net or out is a fault
+- The receiver must let it bounce
 
-## ダブルバウンド
+## Double bounce
 
-次の 2 球は、空中で取ってはいけません。
+These two shots cannot be taken out of the air:
 
-1. サーブ
-2. リターン
+1. Serve
+2. Return
 
-3 打目から、キッチンの外であればボレーできます。この版では、バウンド前に取れない球種（ボレー以外、またはまだボレー禁止のとき）は、バウンドを待ってから自動で打ちます。
+From the third shot, volleys are legal outside the kitchen. If a volley is not legal, the hitter waits for the bounce and then hits automatically.
 
-## キッチン（NVZ）
+## Kitchen (NVZ)
 
-- ネットから 7 フィートの帯が、両側にあります
-- この中（線の上を含む）でボレーするとフォルトです
-- 一度バウンドした球を中に入って打つのは構いません
-- ディングをキッチンに落とすこと自体は反則ではありません
+- There is a 7-foot kitchen on each side of the net
+- A volley in that area (including the line) is a fault
+- Entering after a bounce to hit is legal
+- Landing a dink in the kitchen is legal
 
-## 球種
+## Shots
 
-同じ着弾点でも、球の質が変わります。
+The same landing point still plays differently by shot:
 
-- **ドライブ**: 基本の速い球
-- **ドロップ / ディング**: 遅い山なり。後ろから打てばドロップ、前ならディングに見えます
-- **ボレー**: 空中で切ります。サーブ・リターンでは出ません。キッチン内でも出ません
-- **スマッシュ**: 高い球を叩きつけます。高さ不足ならドライブになります
+- **Drive**: basic fast ball
+- **Drop / dink**: slow arc. Drop from the back, dink at the NVZ
+- **Volley**: cut it out of the air. Not on serve or return. Not in the kitchen
+- **Smash**: put away a high ball. Too low becomes a drive
 
-レティクルはコートの外にも出せます。枠の外に置けばアウトになります。
+The reticle can go out of court. Aiming out makes an out.
 
-## ポイントが終わるとき
+## When a point ends
 
-次のいずれかで 1 点が入ります。
+One of these awards a point:
 
-- ボールがコートの外に落ちた
-- ボールがネットを越えなかった
-- サーブが対角のサービスボックスに入らなかった
-- キッチンでボレーした
-- 守備が届かず、ツーバウンドした
+- Ball lands out
+- Ball does not clear the net
+- Serve misses the diagonal box
+- Kitchen volley
+- Defense cannot reach, second bounce
 
-相手は返してくるだけです。狙いはおおよそコート中央で、読み合いはしません。中央に置き続けるとラリーは続きます。空いている場所へ置くか、枠の外へ出すとポイントになります。
+The opponent only returns. It aims near center and does not read you. Safe center shots keep the rally going. Winners come from open space or from aiming out.
 
-## この版にないもの
+## Not in this slice
 
-- タイミングで球の質が変わること
-- 打つ人のトグル
-- サイドチェンジ、サイドアウト制、2 点差、サーバー 2 人制
-- ロブ、フェイント、回転の使い分け
-- 相手が空きを狙ったり、ポーチしたりすること
+- Timing that changes shot quality
+- Toggle who hits
+- Side change, side-out scoring, win-by-2, two-server rotation
+- Lobs, fakes, spin
+- Opponent poaching or hunting gaps

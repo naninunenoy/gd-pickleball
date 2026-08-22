@@ -10,13 +10,13 @@ const HIGH_CONTACT := 6.4
 static func label(id: int, hitter_in_front: bool = false) -> String:
 	match id:
 		Id.DROP:
-			return "ディング" if hitter_in_front else "ドロップ"
+			return "Dink" if hitter_in_front else "Drop"
 		Id.VOLLEY:
-			return "ボレー"
+			return "Volley"
 		Id.SMASH:
-			return "スマッシュ"
+			return "Smash"
 		_:
-			return "ドライブ"
+			return "Drive"
 
 
 static func flight_time(id: int) -> float:

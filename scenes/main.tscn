@@ -32,7 +32,7 @@ offset_right = 360.0
 offset_bottom = 88.0
 theme_override_colors/font_color = Color(0.93, 0.96, 0.9, 1)
 theme_override_font_sizes/font_size = 28
-text = "あなた  0  -  0  相手"
+text = "You  0  -  0  CPU"
 
 [node name="Status" type="Label" parent="UI"]
 offset_left = 28.0
@@ -41,7 +41,7 @@ offset_right = 360.0
 offset_bottom = 180.0
 theme_override_colors/font_color = Color(0.82, 0.9, 0.78, 1)
 theme_override_font_sizes/font_size = 22
-text = "サーブ"
+text = "Serve"
 
 [node name="Reason" type="Label" parent="UI"]
 offset_left = 28.0
@@ -62,7 +62,7 @@ offset_right = -28.0
 offset_bottom = 220.0
 theme_override_colors/font_color = Color(0.9, 0.93, 0.86, 1)
 theme_override_font_sizes/font_size = 22
-text = "球種"
+text = "Shots"
 
 [node name="Help" type="Label" parent="UI"]
 anchors_preset = 3
@@ -76,4 +76,4 @@ offset_right = -28.0
 offset_bottom = -24.0
 theme_override_colors/font_color = Color(0.7, 0.78, 0.7, 1)
 theme_override_font_sizes/font_size = 18
-text = "操作"
+text = "Controls"

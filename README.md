@@ -1,15 +1,17 @@
 # gd-pickleball
 
-見下ろし 2D のピックルボール・ダブルスです。今の版はサーブからラリーを繰り返し、先に 11 点です。
+Overhead 2D pickleball doubles. This version repeats serve-to-rally points. First to 11.
 
-- 操作とルール（人間向け）: [`docs/rules.md`](docs/rules.md)
-- 実装メモ（AI / 開発者向け）: [`docs/implementation.md`](docs/implementation.md)
+- Player rules: [`docs/rules.md`](docs/rules.md)
+- Implementation notes: [`docs/implementation.md`](docs/implementation.md)
 
-WASD は選手移動ではなく打ち先、東西南北は球種です。移動は自動で、近い方が打ちます。
+WASD aims the landing, it does not move a player. Arrows choose the shot. Movement is automatic. The closest player hits.
 
-## 動かし方
+In-game text is English only. Godot's default font does not cover Japanese.
 
-Godot **4.7.2** で `scenes/main.tscn` を実行します。ヘッドレス確認:
+## Run
+
+Godot **4.7.2**, main scene `scenes/main.tscn`. Headless checks:
 
 ```bash
 ./scripts/install_godot.sh
@@ -17,19 +19,19 @@ godot --headless --path . -s res://scripts/check_slice.gd
 godot --headless --path . --quit-after 720 -- --auto-rally
 ```
 
-## Web 公開
+## Web
 
-Godot 4.7 / GDScript を GitHub Pages 向け WASM で出します。ゲームの GDScript をブラウザ用にコンパイルし直すのではなく、ビルド済みのエンジン WASM と `.pck` をセットで書き出します。
+Godot 4.7 / GDScript exports to WASM for GitHub Pages. The game scripts are not recompiled for the browser. A prebuilt engine WASM ships with a `.pck`.
 
-GitHub Pages 向けには **スレッドなし** の Web エクスポートを使います。Godot 4.3 以降の既定値で、`SharedArrayBuffer` 用の COOP/COEP ヘッダが不要なため、カスタム HTTP ヘッダを送れない GitHub Pages でも動きます。
+GitHub Pages uses a **no-threads** web export. That is the Godot 4.3+ default, so COOP/COEP headers for `SharedArrayBuffer` are not required.
 
-制約:
+Limits:
 
-- Web は Compatibility レンダラ / WebGL 2.0 のみ
-- Godot 4 の C# は Web 非対応。このリポジトリは GDScript 専用
-- スレッドなしビルドはマルチスレッドより遅い
+- Web is Compatibility renderer / WebGL 2.0 only
+- Godot 4 C# does not export to web. This repo is GDScript only
+- No-threads builds are slower than threaded ones
 
-公開 URL（Pages を有効化したあと）:
+Public URL after Pages is enabled:
 
 https://naninunenoy.github.io/gd-pickleball/
 
@@ -39,4 +41,4 @@ https://naninunenoy.github.io/gd-pickleball/
 python3 -m http.server 8080 --directory build/web
 ```
 
-`file://` で HTML を直接開いても動きません。`main` への push で `.github/workflows/web.yml` が Pages に出します。リポジトリで一度だけ、Pages のソースを **GitHub Actions** にしてください。
+Opening the HTML via `file://` will not work. Push to `main` runs `.github/workflows/web.yml`. Set Pages source to **GitHub Actions** once in the repo settings.
