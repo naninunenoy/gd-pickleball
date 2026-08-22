@@ -32,6 +32,8 @@ func _init() -> void:
 	var deep_right := MatchRules.zone_center(1, 0)
 	failed += _expect(deep_right.x > 10.0 and deep_right.y < 7.5, "deep right center")
 	failed += _expect(ShotCatalog.flight_time(ShotCatalog.Id.SOFT) > ShotCatalog.flight_time(ShotCatalog.Id.HARD), "soft is slower than hard")
+	var volley_net := MatchRules.height_at_net(Vector2(10.0, 40.6), Vector2(10.0, 8.0), 2.8, 0.0, ShotCatalog.apex_extra(ShotCatalog.Id.HARD, true, 2.8))
+	failed += _expect(volley_net > MatchRules.NET_HEIGHT, "hard volley from baseline clears the net")
 	var ball := RallyBall.new()
 	ball.launch(Vector2(15.0, 45.0), 2.8, Vector2(5.0, 7.5), ShotCatalog.Id.HARD)
 	var frames := 0

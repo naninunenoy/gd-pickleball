@@ -26,7 +26,7 @@ static func apex_extra(id: int, in_air: bool = false, height: float = 0.0) -> fl
 	if in_air:
 		if id == Id.SOFT:
 			return 2.4
-		return 0.15 if height >= SMASH_MIN_HEIGHT else 1.1
+		return 0.15 if height >= SMASH_MIN_HEIGHT else 2.2
 	if id == Id.SOFT:
 		return 6.4
 	return 3.1

@@ -6,12 +6,13 @@ All in-game strings must stay English. The project embeds `fonts/Inter-Regular.t
 
 ## What this slice must prove
 
-- Both partners are controlled as a team. WASD selects one of 6 opponent zones, it does not move a player
-- Z is soft, X is hard. Those two paces are the only swings. Human contact is not automatic
+- Both partners are controlled as a team. The mouse aims a free landing on the opponent court. It does not move a player
+- Click is soft, double-click is hard. Those two paces are the only swings. Human contact is not automatic
 - Serves are not aimed. They always land at `MatchRules.serve_land_point`. No service fault
 - Closest player is the hitter. Partner covers the open half
+- If a volley is legal and the ball is on the defender's side outside the NVZ, run to the airborne ball and hit it in the air. Do not wait for a bounce
 - Double bounce and NVZ volley faults are in from the start
-- Opponent AI only returns, and still auto-hits
+- Opponent AI only returns, and still auto-hits (including legal volleys)
 - Rally scoring, first to 11
 
 ## Layout
@@ -60,17 +61,17 @@ CPU odd:    CPU left = screen right serves, target = south-left box
 
 `main.gd` `Phase`:
 
-1. `SERVE_AIM` — no zone highlight. Human presses Z/X; CPU waits, then serves to `serve_land_point`
-2. `IN_FLIGHT` — flight or first bounce. Human must press Z/X while in range. CPU auto-returns after the bounce
+1. `SERVE_AIM` — reticle hidden on your serve. Human click/double-click; CPU waits, then serves to `serve_land_point`
+2. `IN_FLIGHT` — flight or first bounce. Human must click while in range. CPU auto-returns. Legal volleys are taken in the air
 3. `POINT_END` — show the reason for about 1.4s
-4. `MATCH_END` — 11 points. A shot button rematches
+4. `MATCH_END` — 11 points. A click rematches
 
 `hits_completed` is the number of legal outbound hits.
 
 - Shot 1 (serve) and shot 2 (return) cannot be volleyed
 - Incoming balls with `hits_completed >= 3` can be volleyed
 
-If volley is selected during the double-bounce window, do not take it in the air; wait for the bounce. A kitchen volley is a fault only when volleys are otherwise legal and contact happens in the air in the NVZ.
+If a volley is not legal yet, ignore in-air clicks and wait for the bounce. A kitchen volley is a fault only when volleys are otherwise legal and contact happens in the air in the NVZ.
 
 ## Input
 
@@ -78,22 +79,19 @@ Actions are registered in `main.gd` `_ensure_actions()`. Do not depend on the `p
 
 | action | role |
 |---|---|
-| `aim_*` | WASD / arrows / D-pad / stick. Move the 2x3 zone cursor. Hidden during your serve |
-| `shot_soft` | Z / A. Slow high ball. Also starts a serve |
-| `shot_hard` | X / B. Fast low ball. Also starts a serve |
+| mouse left | First click arms Soft and waits 0.2s for a possible double-click. `event.double_click` upgrades to Hard immediately. Also starts a serve |
+| `shot_soft` | Z / A. Immediate soft. Also starts a serve |
+| `shot_hard` | X / B. Immediate hard. Also starts a serve |
 | `confirm` | Enter rematch only |
 | `pause` | Space / Start. Toggles pause. Does not hit |
 
-Zones on the north court, `MatchRules.zone_rect(col, row)`:
+Mouse court position is clamped to the north side of the net and written to `reticle.court_pos`. Human returns use that point. Out of court is allowed so a miss can go out.
 
-- col 0 left, col 1 right
-- row 0 deep (`y = 0 .. 7.5`), row 1 mid (`7.5 .. 15`), row 2 kitchen (`15 .. 22`)
+Human hits only while a swing is armed and the hitter is in range. `--auto-rally` presses Hard for the human so headless rallies still run.
 
-Human hits only on `just_pressed` while in range. `--auto-rally` presses Hard for the human so headless rallies still run.
+`toggle_hitter` and leftover `aim_*` actions are reserved and ignored. Do not add early/late quality windows yet.
 
-`toggle_hitter` is reserved and ignored. Do not add early/late quality windows yet.
-
-Serve uses Z/X only for pace. Landing is always `serve_land_point`. In-air Z/X after the double bounce is a volley (hard + high = smash). Kitchen volleys still fault.
+Serve uses click/double-click only for pace. Landing is always `serve_land_point`. In-air click after the double bounce is a volley (hard + high = smash). Kitchen volleys still fault.
 
 ## Ball
 
@@ -111,6 +109,7 @@ Net fault: on the frame the path crosses `y = 22`, `height < 3.0`. Aiming to the
 ## Auto movement
 
 - Only the defending hitter runs to the contact point
+- Contact is `ball.ground_pos` when a volley is legal, the ball is on the defender's side, and it is not over the NVZ. Otherwise contact is the predicted bounce
 - Partner goes home (back or NVZ line)
 - Everyone stays back while `hits_completed < 2`
 - After that, the off-ball player steps to the NVZ line
@@ -125,7 +124,7 @@ Return only.
 
 - Land near the center of the opponent court (small jitter)
 - Drop if standing near the NVZ, otherwise drive
-- Do not volley. Wait for the bounce
+- Volley when it is legal and the hitter is outside the NVZ. Otherwise wait for the bounce
 - Do not poach, hunt gaps, or vary pace on purpose
 
 ## HUD
@@ -135,7 +134,7 @@ Required:
 - Court and NVZ
 - Four players, hitter ring
 - Ball, shadow, predicted land
-- 6-zone highlight on the opponent court
+- Free-aim reticle on the opponent court (hidden during your serve)
 - Score and constraint (let it bounce / volley OK / NVZ)
 - Soft / Hard labels
 
@@ -152,7 +151,6 @@ OK in a later slice:
 Do not add now:
 
 - WASD moving athletes
-- Shot buttons choosing a free landing instead of a zone
 - Physics-engine ball flight
 - Official two-server rotation halfway
 - Character stats, stamina, gauges

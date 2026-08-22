@@ -4,6 +4,7 @@ enum Phase { SERVE_AIM, IN_FLIGHT, POINT_END, MATCH_END }
 
 const POINT_PAUSE := 1.45
 const CPU_SERVE_DELAY := 0.8
+const DOUBLE_CLICK := 0.2
 
 var map := CourtMap.new()
 var phase: Phase = Phase.SERVE_AIM
@@ -13,13 +14,13 @@ var human_serving := true
 var hits_completed := 0
 var last_hitter_human := true
 var armed := ShotCatalog.Id.SOFT
-var zone_col := 0
-var zone_row := 1
 var point_reason := ""
 var phase_time := 0.0
 var auto_rally := false
 var paused := false
 var _pressed_shot := -1
+var _armed_swing := -1
+var _click_wait := 0.0
 
 var human_left: Athlete
 var human_right: Athlete
@@ -49,12 +50,12 @@ func _ready() -> void:
 	court_view.map = map
 	_spawn_world()
 	help_label.text = "\n".join([
-		"WASD  pick a zone",
-		"Z  soft hit",
-		"X  hard hit",
+		"Mouse  aim",
+		"Click  soft",
+		"Double-click  hard",
 		"Space  pause",
 		"",
-		"6 zones: L/R x deep/mid/kitchen",
+		"Volley is taken in the air.",
 		"Movement is automatic.",
 	])
 	_start_match()
@@ -96,7 +97,7 @@ func _process(delta: float) -> void:
 	match phase:
 		Phase.SERVE_AIM:
 			_update_setup(delta)
-			if human_serving and (_pressed_shot >= 0 or auto_rally):
+			if human_serving and (_swing_ready() or auto_rally):
 				_serve_now()
 			elif not human_serving and phase_time >= CPU_SERVE_DELAY:
 				_serve_now()
@@ -115,7 +116,7 @@ func _process(delta: float) -> void:
 	_update_ui()
 
 
-func _poll_input(_delta: float) -> void:
+func _poll_input(delta: float) -> void:
 	if not InputMap.has_action("pause"):
 		_ensure_actions()
 	if Input.is_action_just_pressed("pause") and phase != Phase.MATCH_END:
@@ -126,56 +127,82 @@ func _poll_input(_delta: float) -> void:
 		return
 	_pressed_shot = -1
 	if Input.is_action_just_pressed("shot_soft"):
-		_pressed_shot = ShotCatalog.Id.SOFT
+		_arm_swing(ShotCatalog.Id.SOFT, true)
 	elif Input.is_action_just_pressed("shot_hard"):
-		_pressed_shot = ShotCatalog.Id.HARD
+		_arm_swing(ShotCatalog.Id.HARD, true)
+	if _click_wait > 0.0:
+		_click_wait -= delta
+		if _click_wait <= 0.0 and _armed_swing >= 0:
+			_pressed_shot = _armed_swing
+	elif _armed_swing >= 0:
+		_pressed_shot = _armed_swing
 	if _pressed_shot >= 0:
 		armed = _pressed_shot
 		if phase == Phase.MATCH_END:
 			_start_match()
 	if Input.is_action_just_pressed("confirm") and phase == Phase.MATCH_END:
 		_start_match()
-	var can_aim := phase != Phase.MATCH_END and not (phase == Phase.SERVE_AIM and human_serving)
-	if can_aim:
-		_move_zone_selection()
-
-
-func _move_zone_selection() -> void:
-	var col := zone_col
-	var row := zone_row
-	if Input.is_action_just_pressed("aim_left"):
-		col -= 1
-	if Input.is_action_just_pressed("aim_right"):
-		col += 1
-	if Input.is_action_just_pressed("aim_up"):
-		row -= 1
-	if Input.is_action_just_pressed("aim_down"):
-		row += 1
-	col = clampi(col, 0, MatchRules.ZONE_COLS - 1)
-	row = clampi(row, 0, MatchRules.ZONE_ROWS - 1)
-	if col == zone_col and row == zone_row:
-		return
-	zone_col = col
-	zone_row = row
-	court_view.zone_col = zone_col
-	court_view.zone_row = zone_row
-	court_view.redraw()
-
-
-func _zone_name() -> String:
-	var depth := "Mid"
-	if zone_row == 0:
-		depth = "Deep"
-	elif zone_row == 2:
-		depth = "Kitchen"
-	var side := "Left" if zone_col == 0 else "Right"
-	return "%s %s" % [depth, side]
+	_aim_with_mouse()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R:
 		_start_match()
 		get_viewport().set_input_as_handled()
+
+
+func _input(event: InputEvent) -> void:
+	if paused:
+		return
+	if not (event is InputEventMouseButton):
+		return
+	var mouse := event as InputEventMouseButton
+	if not mouse.pressed or mouse.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if phase == Phase.MATCH_END:
+		_start_match()
+		return
+	if mouse.double_click:
+		_arm_swing(ShotCatalog.Id.HARD, true)
+	else:
+		_arm_swing(ShotCatalog.Id.SOFT, false)
+
+
+func _arm_swing(shot: int, immediate: bool) -> void:
+	armed = shot
+	_armed_swing = shot
+	_click_wait = 0.0 if immediate else DOUBLE_CLICK
+	if immediate:
+		_pressed_shot = shot
+
+
+func _swing_ready() -> bool:
+	return _armed_swing >= 0 and _click_wait <= 0.0
+
+
+func _clear_swing() -> void:
+	_armed_swing = -1
+	_click_wait = 0.0
+	_pressed_shot = -1
+
+
+func _aim_with_mouse() -> void:
+	if phase == Phase.MATCH_END or (phase == Phase.SERVE_AIM and human_serving):
+		return
+	var court := map.to_court(get_viewport().get_mouse_position())
+	court.x = clampf(court.x, -2.0, 22.0)
+	court.y = clampf(court.y, -2.0, MatchRules.NET_Y - 0.35)
+	reticle.court_pos = court
+
+
+func _can_volley_now() -> bool:
+	return MatchRules.volley_legal(hits_completed) and ball.in_air() and not MatchRules.is_in_nvz(ball.ground_pos)
+
+
+func _ball_on_defender_side(defending_human: bool) -> bool:
+	if defending_human:
+		return MatchRules.is_south_of_net(ball.ground_pos)
+	return MatchRules.is_north_of_net(ball.ground_pos)
 
 
 func _apply_ui_font() -> void:
@@ -189,6 +216,7 @@ func _apply_ui_font() -> void:
 func _start_match() -> void:
 	paused = false
 	_set_paused_visible(false)
+	_clear_swing()
 	human_score = 0
 	cpu_score = 0
 	human_serving = true
@@ -204,7 +232,8 @@ func _begin_point() -> void:
 	last_hitter_human = human_serving
 	point_reason = ""
 	_snap_to_setup()
-	reticle.court_pos = MatchRules.zone_center(zone_col, zone_row)
+	_clear_swing()
+	reticle.court_pos = Vector2(10.0, 8.0)
 	court_view.serve_box = _serve_box()
 	court_view.show_serve_box = true
 	court_view.redraw()
@@ -262,13 +291,14 @@ func _serve_now() -> void:
 		return
 	var server := _server()
 	var shot := ShotCatalog.Id.HARD
-	if _pressed_shot == ShotCatalog.Id.SOFT:
+	if _armed_swing == ShotCatalog.Id.SOFT or _pressed_shot == ShotCatalog.Id.SOFT:
 		shot = ShotCatalog.Id.SOFT
 	armed = shot
 	var target := MatchRules.serve_land_point(human_serving, _server_score())
 	court_view.show_serve_box = false
 	court_view.redraw()
 	_execute_hit(server, shot, target, false)
+	_clear_swing()
 
 
 func _update_rally(delta: float) -> void:
@@ -296,7 +326,7 @@ func _bounce_is_legal(pos: Vector2) -> bool:
 
 
 func _contact_point(defending_human: bool) -> Vector2:
-	if ball.in_air() and defending_human and _pressed_shot >= 0 and MatchRules.volley_legal(hits_completed):
+	if _can_volley_now() and _ball_on_defender_side(defending_human):
 		return ball.ground_pos
 	return ball.predicted_land()
 
@@ -354,15 +384,12 @@ func _try_contact() -> void:
 			return
 		_try_human_swing(hitter, swing)
 		return
-	if ball.in_air():
-		return
-	if ball.waiting_after_bounce() and hitter.can_reach(ball.ground_pos):
-		_human_or_ai_hit(hitter, false)
+	_try_cpu_swing(hitter)
 
 
 func _try_human_swing(hitter: Athlete, shot: int) -> void:
 	if ball.in_air():
-		if not MatchRules.volley_legal(hits_completed):
+		if not _can_volley_now() or not _ball_on_defender_side(true):
 			return
 		if not hitter.can_reach(ball.ground_pos):
 			return
@@ -371,9 +398,25 @@ func _try_human_swing(hitter: Athlete, shot: int) -> void:
 			return
 		armed = shot
 		_human_or_ai_hit(hitter, true)
+		_clear_swing()
 		return
 	if ball.waiting_after_bounce() and hitter.can_reach(ball.ground_pos):
 		armed = shot
+		_human_or_ai_hit(hitter, false)
+		_clear_swing()
+
+
+func _try_cpu_swing(hitter: Athlete) -> void:
+	if ball.in_air():
+		if not _can_volley_now() or not _ball_on_defender_side(false):
+			return
+		if not hitter.can_reach(ball.ground_pos):
+			return
+		if hitter.in_nvz():
+			return
+		_human_or_ai_hit(hitter, true)
+		return
+	if ball.waiting_after_bounce() and hitter.can_reach(ball.ground_pos):
 		_human_or_ai_hit(hitter, false)
 
 
@@ -382,7 +425,7 @@ func _human_or_ai_hit(hitter: Athlete, in_air: bool) -> void:
 	var target: Vector2
 	if hitter.is_human():
 		shot = armed
-		target = MatchRules.zone_center(zone_col, zone_row)
+		target = reticle.court_pos
 	else:
 		shot = ShotCatalog.Id.SOFT if hitter.in_front() else ShotCatalog.Id.HARD
 		target = Vector2(10.0, 36.0) + Vector2(randf_range(-2.0, 2.0), randf_range(-2.2, 2.2))
@@ -418,6 +461,7 @@ func _end_point(human_won: bool, reason: String) -> void:
 	human_serving = human_won
 	court_view.show_serve_box = false
 	court_view.redraw()
+	_clear_swing()
 	if auto_rally:
 		print("point: %s  score %d-%d  hits %d" % [reason, human_score, cpu_score, hits_completed])
 
@@ -439,11 +483,7 @@ func _everyone() -> Array[Athlete]:
 
 func _sync_visuals() -> void:
 	var show_aim := phase != Phase.MATCH_END and not (phase == Phase.SERVE_AIM and human_serving)
-	court_view.zone_col = zone_col
-	court_view.zone_row = zone_row
-	court_view.show_zones = show_aim
-	court_view.redraw()
-	reticle.court_pos = MatchRules.zone_center(zone_col, zone_row)
+	reticle.valid = MatchRules.is_in_court(reticle.court_pos) and MatchRules.is_north_of_net(reticle.court_pos)
 	reticle.shown = show_aim
 	reticle.sync_screen()
 	ball.sync_screen()
@@ -458,10 +498,12 @@ func _update_ui() -> void:
 		status_label.text = "Paused\nSpace to resume"
 	elif phase == Phase.MATCH_END:
 		var winner := "You win" if human_score > cpu_score else "CPU wins"
-		status_label.text = "Match over  %s\nPress Z or X to rematch" % winner
+		status_label.text = "Match over  %s\nClick to rematch" % winner
 	elif phase == Phase.SERVE_AIM:
-		var who := "Your serve" if human_serving else "CPU serve"
-		status_label.text = "%s\nPress Z or X" % who
+		if human_serving:
+			status_label.text = "Your serve\nClick to serve"
+		else:
+			status_label.text = "CPU serve"
 	elif phase == Phase.POINT_END:
 		var who := "you" if human_serving else "CPU"
 		status_label.text = "%s\nNext serve: %s" % [point_reason, who]
@@ -475,11 +517,8 @@ func _update_ui() -> void:
 		else:
 			status_label.text = "Volley OK"
 	var lines: PackedStringArray = ["Hit"]
-	lines.append(_shot_row(ShotCatalog.Id.SOFT, "Z", "Soft"))
-	lines.append(_shot_row(ShotCatalog.Id.HARD, "X", "Hard"))
-	lines.append("")
-	lines.append("Zone")
-	lines.append(_zone_name())
+	lines.append(_shot_row(ShotCatalog.Id.SOFT, "Click", "Soft"))
+	lines.append(_shot_row(ShotCatalog.Id.HARD, "Double", "Hard"))
 	shots_label.text = "\n".join(lines)
 
 

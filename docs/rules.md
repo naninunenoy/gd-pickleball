@@ -10,27 +10,16 @@ You control both players on the bottom court at once. You do not walk a characte
 
 | Input | Meaning |
 |---|---|
-| WASD / D-pad / left stick | Choose a target **zone** on the opponent court |
-| Z / gamepad A | Soft hit (slow, high) |
-| X / gamepad B | Hard hit (fast, low) |
+| Mouse | Aim where the next return should land on the opponent court |
+| Click | Soft hit (slow, high) |
+| Double-click | Hard hit (fast, low) |
 | Space / Start | Pause |
 
-The opponent court is split into 6 zones: left/right by deep, mid, and kitchen.
+Z / gamepad A still hit soft. X / gamepad B still hit hard.
 
-```
-W  deeper (toward their baseline)
-S  shorter (toward the net)
-A  left
-D  right
-```
+Move the mouse to place the reticle. The ball goes to that point when you hit. A green reticle is in. A red reticle is out or on your side of the net.
 
-| | Left | Right |
-|---|---|---|
-| Deep | W+A | W+D |
-| Mid | A | D |
-| Kitchen | S+A | S+D |
-
-Press Z or X to hit into the highlighted zone. If you never press, the ball bounces twice and you lose the point. CPU still returns on its own.
+If you never click, the ball bounces twice and you lose the point. CPU still returns on its own.
 
 ## Two-player movement
 
@@ -39,6 +28,8 @@ Press Z or X to hit into the highlighted zone. If you never press, the ball boun
 - The partner covers the open half
 - Both stay back until serve and return are done
 - After that, the off-ball player moves up to the kitchen line
+
+If a volley is legal, the hitter runs to the airborne ball and can take it in the air. They do not wait for a bounce.
 
 Hitter toggle and changing ends are not in this slice. Left stays left, right stays right.
 
@@ -55,9 +46,9 @@ Hitter toggle and changing ends are not in this slice. Left stays left, right st
 
 - You do not aim the serve
 - There is no service fault
-- Press Z or X. The ball always lands deep in the legal diagonal box
+- Click or double-click. The ball always lands deep in the legal diagonal box
 - Soft/hard only changes the arc
-- The receiver must let it bounce, then press Z or X to return
+- The receiver must let it bounce, then click to return
 
 ## Double bounce
 
@@ -66,7 +57,7 @@ These two shots cannot be taken out of the air:
 1. Serve
 2. Return
 
-From the third shot, Z or X in the air is a volley if you are outside the kitchen. Soft is a soft volley. Hard is a punch or smash.
+From the third shot, a click in the air is a volley if you are outside the kitchen. Soft is a soft volley. Hard is a punch or smash. If that volley is legal, take it in the air. Do not wait for a bounce.
 
 ## Kitchen (NVZ)
 
@@ -79,19 +70,19 @@ From the third shot, Z or X in the air is a volley if you are outside the kitche
 
 Only two paces:
 
-- **Soft (Z)**: slow and high. Use this to drop or dink
-- **Hard (X)**: fast and low. Use this to drive. A high ball becomes a smash
+- **Soft (click)**: slow and high. Use this to drop or dink
+- **Hard (double-click)**: fast and low. Use this to drive. A high ball becomes a smash
 
-WASD picks the zone. Z/X is how hard it gets there.
+The mouse picks the landing. Click vs double-click is how hard it gets there.
 
 ## When a point ends
 
 One of these awards a point:
 
-- Ball lands out (returns only; zones are in court)
-- Ball does not clear the net (returns only)
+- Ball lands out
+- Ball does not clear the net
 - Kitchen volley
-- You do not press in time, second bounce
+- You do not click in time, second bounce
 
 The opponent only returns. It aims near center and does not read you.
 
