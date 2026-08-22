@@ -22,14 +22,14 @@ static func label(id: int, hitter_in_front: bool = false) -> String:
 static func flight_time(id: int) -> float:
 	match id:
 		Id.DRIVE:
-			return 0.86
+			return 1.55
 		Id.DROP:
-			return 1.18
+			return 2.10
 		Id.VOLLEY:
-			return 0.50
+			return 0.90
 		Id.SMASH:
-			return 0.42
-	return 0.86
+			return 0.78
+	return 1.55
 
 
 static func apex_extra(id: int) -> float:

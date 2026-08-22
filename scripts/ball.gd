@@ -34,6 +34,7 @@ func hold(pos: Vector2, h: float) -> void:
 	just_first_bounce = false
 	just_second_bounce = false
 	just_net = false
+	ignore_net = false
 
 
 func launch(from: Vector2, from_h: float, to: Vector2, shot: int, skip_net: bool = false) -> void:
@@ -127,7 +128,7 @@ func _begin_bounce() -> void:
 	start_height = 0.05
 	end_height = 0.0
 	apex_extra = 2.15
-	duration = 0.52
+	duration = 0.90
 	time = 0.0
 	ground_pos = start_pos
 	height = start_height
