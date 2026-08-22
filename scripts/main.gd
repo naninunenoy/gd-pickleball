@@ -16,6 +16,7 @@ var armed := ShotCatalog.Id.DRIVE
 var point_reason := ""
 var phase_time := 0.0
 var auto_rally := false
+var paused := false
 var _pressed_shot := -1
 
 var human_left: Athlete
@@ -32,6 +33,8 @@ var reticle: AimReticle
 @onready var shots_label: Label = $UI/Shots
 @onready var help_label: Label = $UI/Help
 @onready var reason_label: Label = $UI/Reason
+@onready var pause_layer: CanvasLayer = $Pause
+@onready var pause_label: Label = $Pause/Label
 
 var _ui_font: Font
 
@@ -50,6 +53,7 @@ func _ready() -> void:
 		"L/B volley  J/X smash",
 		"",
 		"Press a shot to hit.",
+		"Space  pause",
 		"Movement is automatic.",
 	])
 	_start_match()
@@ -83,6 +87,10 @@ func _process(delta: float) -> void:
 		map.configure(view)
 		court_view.redraw()
 	_poll_input(delta)
+	if paused:
+		_sync_visuals()
+		_update_ui()
+		return
 	phase_time += delta
 	match phase:
 		Phase.SERVE_AIM:
@@ -107,8 +115,14 @@ func _process(delta: float) -> void:
 
 
 func _poll_input(delta: float) -> void:
-	if not InputMap.has_action("shot_north"):
+	if not InputMap.has_action("pause"):
 		_ensure_actions()
+	if Input.is_action_just_pressed("pause") and phase != Phase.MATCH_END:
+		paused = not paused
+		_set_paused_visible(paused)
+		return
+	if paused:
+		return
 	_pressed_shot = -1
 	if Input.is_action_just_pressed("shot_north"):
 		_pressed_shot = ShotCatalog.Id.DRIVE
@@ -139,11 +153,13 @@ func _apply_ui_font() -> void:
 	_ui_font = load("res://fonts/Inter-Regular.ttf")
 	if _ui_font == null:
 		return
-	for label in [score_label, status_label, shots_label, help_label, reason_label]:
+	for label in [score_label, status_label, shots_label, help_label, reason_label, pause_label]:
 		label.add_theme_font_override("font", _ui_font)
 
 
 func _start_match() -> void:
+	paused = false
+	_set_paused_visible(false)
 	human_score = 0
 	cpu_score = 0
 	human_serving = true
@@ -406,7 +422,9 @@ func _sync_visuals() -> void:
 func _update_ui() -> void:
 	score_label.text = "You  %d  -  %d  CPU" % [human_score, cpu_score]
 	reason_label.text = point_reason
-	if phase == Phase.MATCH_END:
+	if paused:
+		status_label.text = "Paused\nSpace to resume"
+	elif phase == Phase.MATCH_END:
 		var winner := "You win" if human_score > cpu_score else "CPU wins"
 		status_label.text = "Match over  %s\nPress a shot to rematch" % winner
 	elif phase == Phase.SERVE_AIM:
@@ -464,6 +482,10 @@ func _setup_action(name: String, events: Array) -> void:
 		InputMap.action_add_event(name, event)
 
 
+func _set_paused_visible(show: bool) -> void:
+	pause_layer.visible = show
+
+
 func _exit_tree() -> void:
 	if auto_rally:
 		print("auto_rally end: hits=%d score=%d-%d phase=%d" % [hits_completed, human_score, cpu_score, phase])
@@ -475,8 +497,9 @@ func _ensure_actions() -> void:
 	_setup_action("aim_up", [_key_event(KEY_W), _joy_axis(JOY_AXIS_LEFT_Y, -1.0)])
 	_setup_action("aim_down", [_key_event(KEY_S), _joy_axis(JOY_AXIS_LEFT_Y, 1.0)])
 	_setup_action("shot_north", [_key_event(KEY_I), _key_event(KEY_UP), _joy_button(JOY_BUTTON_Y)])
-	_setup_action("shot_south", [_key_event(KEY_K), _key_event(KEY_DOWN), _key_event(KEY_SPACE), _joy_button(JOY_BUTTON_A)])
+	_setup_action("shot_south", [_key_event(KEY_K), _key_event(KEY_DOWN), _joy_button(JOY_BUTTON_A)])
 	_setup_action("shot_west", [_key_event(KEY_J), _key_event(KEY_LEFT), _joy_button(JOY_BUTTON_X)])
 	_setup_action("shot_east", [_key_event(KEY_L), _key_event(KEY_RIGHT), _joy_button(JOY_BUTTON_B)])
 	_setup_action("confirm", [_key_event(KEY_ENTER)])
+	_setup_action("pause", [_key_event(KEY_SPACE), _joy_button(JOY_BUTTON_START)])
 	_setup_action("toggle_hitter", [_key_event(KEY_SHIFT), _joy_button(JOY_BUTTON_LEFT_SHOULDER)])

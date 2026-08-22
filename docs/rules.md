@@ -18,11 +18,11 @@ NESW is the face-button cluster (how you hit), not the D-pad.
 | Direction | Shot | Gamepad | PlayStation | Keyboard |
 |---|---|---|---|---|
 | North | Drive | Y | Triangle | **I** (also Up) |
-| South | Drop / dink | A | Cross | **K** (also Down, Space) |
+| South | Drop / dink | A | Cross | **K** (also Down) |
 | West | Smash | X | Square | **J** (also Left) |
 | East | Volley | B | Circle | **L** (also Right) |
 
-Keyboard: WASD is the left hand (aim), IJKL is the right hand (face buttons). That is the usual twin-stick layout. Arrow keys are extra aliases. Space is also South / A.
+Keyboard: WASD is the left hand (aim), IJKL is the right hand (face buttons). That is the usual twin-stick layout. Arrow keys are extra aliases. **Space pauses** (Start on a gamepad).
 
 You must press a shot button to hit. If you never press, the ball bounces twice and you lose the point. CPU still returns on its own.
 

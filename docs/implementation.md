@@ -80,10 +80,11 @@ Actions are registered in `main.gd` `_ensure_actions()`. Do not depend on the `p
 |---|---|
 | `aim_*` | return reticle. Hidden during your serve. Do not move athletes |
 | `shot_north` | Y / I / Up. Drive. Also starts a serve |
-| `shot_south` | A / K / Down / Space. Drop. Also starts a serve |
+| `shot_south` | A / K / Down. Drop. Also starts a serve |
 | `shot_west` | X / J / Left. Smash |
 | `shot_east` | B / L / Right. Volley |
 | `confirm` | Enter rematch only |
+| `pause` | Space / Start. Toggles pause. Does not hit |
 
 Do not bind shots to the D-pad. NESW here is the face-button cluster.
 
