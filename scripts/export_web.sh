@@ -14,6 +14,10 @@ if [[ ! -x "$GODOT" ]]; then
   exit 1
 fi
 
+mkdir -p "$ROOT/build" "$OUT_DIR"
+# Prevent Godot from importing a previous web export back into the project.
+touch "$ROOT/build/.gdignore"
+rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 echo "Importing project resources"

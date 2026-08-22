@@ -5,5 +5,6 @@
 /android/
 export_credentials.cfg
 
-# Generated Web/WASM export
-/build/
+# Generated Web/WASM export. Keep .gdignore so Godot never imports the output.
+/build/*
+!/build/.gdignore
