@@ -7,7 +7,7 @@ Overhead 2D pickleball doubles. This version repeats serve-to-rally points. Firs
 
 WASD aims the landing, it does not move a player. Arrows choose the shot. Movement is automatic. The closest player hits.
 
-In-game text is English only. Godot's default font does not cover Japanese.
+In-game text is English only. `fonts/Inter-Regular.ttf` is the UI font so labels stay readable in the web build.
 
 ## Run
 

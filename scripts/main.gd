@@ -32,10 +32,13 @@ var reticle: AimReticle
 @onready var help_label: Label = $UI/Help
 @onready var reason_label: Label = $UI/Reason
 
+var _ui_font: Font
+
 
 func _ready() -> void:
 	auto_rally = "--auto-rally" in OS.get_cmdline_args() or "--auto-rally" in OS.get_cmdline_user_args()
 	_ensure_actions()
+	_apply_ui_font()
 	map.configure(get_viewport_rect().size)
 	court_view.map = map
 	_spawn_world()
@@ -126,6 +129,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R:
 		_start_match()
 		get_viewport().set_input_as_handled()
+
+
+func _apply_ui_font() -> void:
+	_ui_font = load("res://fonts/Inter-Regular.ttf")
+	if _ui_font == null:
+		return
+	for label in [score_label, status_label, shots_label, help_label, reason_label]:
+		label.add_theme_font_override("font", _ui_font)
 
 
 func _start_match() -> void:

@@ -2,7 +2,7 @@
 
 `docs/rules.md` is the player-facing source of truth. If behavior changes, update `rules.md` first, then match the code. This file is internals and a list of things not to add yet.
 
-All in-game strings must stay English. Godot's default font does not cover Japanese.
+All in-game strings must stay English. The project embeds `fonts/Inter-Regular.ttf` so Web/WASM labels are not tofu boxes.
 
 ## What this slice must prove
 
