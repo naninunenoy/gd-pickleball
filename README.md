@@ -4,6 +4,7 @@ Overhead 2D pickleball doubles. This version repeats serve-to-rally points. Firs
 
 - Player rules: [`docs/rules.md`](docs/rules.md)
 - Implementation notes: [`docs/implementation.md`](docs/implementation.md)
+- Design discussion (phases, kitchen, camera hypotheses): [`docs/design-discussion.md`](docs/design-discussion.md)
 
 Mouse aims on the opponent court. Click is a soft hit, double-click is a hard hit. If a volley is legal, take it in the air. Serves always land in the legal box; there is no service fault.
 
