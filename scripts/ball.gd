@@ -37,13 +37,13 @@ func hold(pos: Vector2, h: float) -> void:
 	ignore_net = false
 
 
-func launch(from: Vector2, from_h: float, to: Vector2, shot: int, skip_net: bool = false) -> void:
+func launch(from: Vector2, from_h: float, to: Vector2, shot: int, skip_net: bool = false, in_air: bool = false) -> void:
 	start_pos = from
 	land_pos = to
 	start_height = from_h
 	end_height = 0.0
-	apex_extra = ShotCatalog.apex_extra(shot)
-	duration = maxf(ShotCatalog.flight_time(shot), 0.12)
+	apex_extra = ShotCatalog.apex_extra(shot, in_air, from_h)
+	duration = maxf(ShotCatalog.flight_time(shot, in_air, from_h), 0.12)
 	time = 0.0
 	bounce_count = 0
 	ground_pos = from

@@ -4,6 +4,9 @@ extends Node2D
 var map: CourtMap
 var serve_box := Rect2()
 var show_serve_box := false
+var show_zones := true
+var zone_col := 0
+var zone_row := 1
 
 
 func redraw() -> void:
@@ -20,6 +23,8 @@ func _draw() -> void:
 	var nvz_tl := map.to_screen(Vector2(0.0, MatchRules.NVZ_NORTH))
 	var nvz_size := Vector2(MatchRules.COURT_WIDTH, MatchRules.NVZ_DEPTH * 2.0) * map.scale
 	draw_rect(Rect2(nvz_tl, nvz_size), Color(0.16, 0.36, 0.28, 0.95))
+	if show_zones:
+		_draw_zones()
 	if show_serve_box:
 		var box_tl := map.to_screen(serve_box.position)
 		var box_sz := serve_box.size * map.scale
@@ -31,12 +36,28 @@ func _draw() -> void:
 	_hline(MatchRules.NVZ_SOUTH, line, 2.0)
 	_vline_segment(MatchRules.HALF, 0.0, MatchRules.NVZ_NORTH, line, 2.0)
 	_vline_segment(MatchRules.HALF, MatchRules.NVZ_SOUTH, MatchRules.COURT_LENGTH, line, 2.0)
+	if show_zones:
+		_hline(MatchRules.ZONE_DEEP, Color(0.93, 0.94, 0.88, 0.45), 1.5)
+		_vline_segment(MatchRules.HALF, MatchRules.NVZ_NORTH, MatchRules.NET_Y, Color(0.93, 0.94, 0.88, 0.45), 1.5)
 	var net := Color(0.08, 0.08, 0.08, 0.85)
 	_hline(MatchRules.NET_Y, net, 2.0)
 	var post_n := map.to_screen(Vector2(0.0, MatchRules.NET_Y))
 	var post_s := map.to_screen(Vector2(MatchRules.COURT_WIDTH, MatchRules.NET_Y))
 	draw_circle(post_n, 5.0, Color(0.75, 0.75, 0.72))
 	draw_circle(post_s, 5.0, Color(0.75, 0.75, 0.72))
+
+
+func _draw_zones() -> void:
+	for row in MatchRules.ZONE_ROWS:
+		for col in MatchRules.ZONE_COLS:
+			var zone := MatchRules.zone_rect(col, row)
+			var px := Rect2(map.to_screen(zone.position), zone.size * map.scale)
+			var selected := col == zone_col and row == zone_row
+			if selected:
+				draw_rect(px, Color(0.95, 0.88, 0.35, 0.28))
+				_stroke_rect(px, Color(0.98, 0.92, 0.45, 0.95), 3.0)
+			else:
+				draw_rect(px, Color(1, 1, 1, 0.03))
 
 
 func _hline(y_ft: float, color: Color, width: float) -> void:

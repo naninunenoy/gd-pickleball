@@ -5,7 +5,7 @@ Overhead 2D pickleball doubles. This version repeats serve-to-rally points. Firs
 - Player rules: [`docs/rules.md`](docs/rules.md)
 - Implementation notes: [`docs/implementation.md`](docs/implementation.md)
 
-WASD aims the return landing, it does not move a player. Face buttons (IJKL / YAXB) choose the shot and hit. Serves always land in the legal box; there is no service fault.
+WASD picks one of 6 opponent zones. Z is a soft hit, X is a hard hit. Serves always land in the legal box; there is no service fault.
 
 In-game text is English only. `fonts/Inter-Regular.ttf` is the UI font so labels stay readable in the web build.
 

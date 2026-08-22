@@ -11,6 +11,9 @@ const SERVICE_DEPTH := 15.0
 const HALF := 10.0
 const NET_HEIGHT := 3.0
 const POINTS_TO_WIN := 11
+const ZONE_COLS := 2
+const ZONE_ROWS := 3
+const ZONE_DEEP := 7.5
 
 
 static func is_in_court(p: Vector2) -> bool:
@@ -79,6 +82,25 @@ static func serve_land_point(human_serving: bool, server_score: int) -> Vector2:
 	if box.position.y < NET_Y:
 		return Vector2(x, box.end.y - 2.8)
 	return Vector2(x, box.position.y + 2.8)
+
+
+static func zone_rect(col: int, row: int) -> Rect2:
+	var c := clampi(col, 0, ZONE_COLS - 1)
+	var r := clampi(row, 0, ZONE_ROWS - 1)
+	var x := float(c) * HALF
+	var y0 := 0.0
+	var y1 := ZONE_DEEP
+	if r == 1:
+		y0 = ZONE_DEEP
+		y1 = NVZ_NORTH
+	elif r == 2:
+		y0 = NVZ_NORTH
+		y1 = NET_Y
+	return Rect2(x, y0, HALF, y1 - y0)
+
+
+static func zone_center(col: int, row: int) -> Vector2:
+	return box_center(zone_rect(col, row))
 
 
 static func volley_legal(hits_completed: int) -> bool:

@@ -6,8 +6,8 @@ All in-game strings must stay English. The project embeds `fonts/Inter-Regular.t
 
 ## What this slice must prove
 
-- Both partners are controlled as a team. WASD aims the **return** landing, it does not move a player
-- Face buttons (YAXB / IJKL) are shot type **and** the hit. Human contact is not automatic
+- Both partners are controlled as a team. WASD selects one of 6 opponent zones, it does not move a player
+- Z is soft, X is hard. Those two paces are the only swings. Human contact is not automatic
 - Serves are not aimed. They always land at `MatchRules.serve_land_point`. No service fault
 - Closest player is the hitter. Partner covers the open half
 - Double bounce and NVZ volley faults are in from the start
@@ -60,8 +60,8 @@ CPU odd:    CPU left = screen right serves, target = south-left box
 
 `main.gd` `Phase`:
 
-1. `SERVE_AIM` — no reticle. Human presses a face button; CPU waits, then serves to `serve_land_point`
-2. `IN_FLIGHT` — flight or first bounce. Human must press a shot while in range. CPU auto-returns after the bounce
+1. `SERVE_AIM` — no zone highlight. Human presses Z/X; CPU waits, then serves to `serve_land_point`
+2. `IN_FLIGHT` — flight or first bounce. Human must press Z/X while in range. CPU auto-returns after the bounce
 3. `POINT_END` — show the reason for about 1.4s
 4. `MATCH_END` — 11 points. A shot button rematches
 
@@ -78,21 +78,22 @@ Actions are registered in `main.gd` `_ensure_actions()`. Do not depend on the `p
 
 | action | role |
 |---|---|
-| `aim_*` | return reticle. Hidden during your serve. Do not move athletes |
-| `shot_north` | Y / I / Up. Drive. Also starts a serve |
-| `shot_south` | A / K / Down. Drop. Also starts a serve |
-| `shot_west` | X / J / Left. Smash |
-| `shot_east` | B / L / Right. Volley |
+| `aim_*` | WASD / arrows / D-pad / stick. Move the 2x3 zone cursor. Hidden during your serve |
+| `shot_soft` | Z / A. Slow high ball. Also starts a serve |
+| `shot_hard` | X / B. Fast low ball. Also starts a serve |
 | `confirm` | Enter rematch only |
 | `pause` | Space / Start. Toggles pause. Does not hit |
 
-Do not bind shots to the D-pad. NESW here is the face-button cluster.
+Zones on the north court, `MatchRules.zone_rect(col, row)`:
 
-Human hits only on `just_pressed` while in range. `--auto-rally` presses Drive for the human so headless rallies still run.
+- col 0 left, col 1 right
+- row 0 deep (`y = 0 .. 7.5`), row 1 mid (`7.5 .. 15`), row 2 kitchen (`15 .. 22`)
+
+Human hits only on `just_pressed` while in range. `--auto-rally` presses Hard for the human so headless rallies still run.
 
 `toggle_hitter` is reserved and ignored. Do not add early/late quality windows yet.
 
-Default serve shot is drive. `VOLLEY` / `SMASH` on serve become drive. `VOLLEY` after a bounce becomes a drive (punch). `SMASH` without height becomes a drive.
+Serve uses Z/X only for pace. Landing is always `serve_land_point`. In-air Z/X after the double bounce is a volley (hard + high = smash). Kitchen volleys still fault.
 
 ## Ball
 
@@ -134,9 +135,9 @@ Required:
 - Court and NVZ
 - Four players, hitter ring
 - Ball, shadow, predicted land
-- Reticle on returns only (green in, red out). Hidden on your serve
+- 6-zone highlight on the opponent court
 - Score and constraint (let it bounce / volley OK / NVZ)
-- Shot labels (YAXB / IJKL)
+- Soft / Hard labels
 
 ## Add later / do not add now
 
@@ -151,7 +152,7 @@ OK in a later slice:
 Do not add now:
 
 - WASD moving athletes
-- Shot buttons choosing the landing
+- Shot buttons choosing a free landing instead of a zone
 - Physics-engine ball flight
 - Official two-server rotation halfway
 - Character stats, stamina, gauges

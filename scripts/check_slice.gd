@@ -25,15 +25,15 @@ func _init() -> void:
 	failed += _expect(MatchRules.crosses_net(Vector2(10, 40), Vector2(10, 8)), "south to north crosses net")
 	failed += _expect(not MatchRules.crosses_net(Vector2(10, 40), Vector2(12, 32)), "same side does not cross")
 	var net_h := MatchRules.height_at_net(Vector2(10, 40), Vector2(10, 8), 2.8, 0.0, 3.1)
-	failed += _expect(net_h > MatchRules.NET_HEIGHT, "standard drive clears the net")
-	var drop := ShotCatalog.resolve_armed(ShotCatalog.Id.DROP, false, 1.0, true)
-	failed += _expect(drop == ShotCatalog.Id.DROP, "bounce drop stays drop")
-	var punch := ShotCatalog.resolve_armed(ShotCatalog.Id.VOLLEY, false, 1.0, true)
-	failed += _expect(punch == ShotCatalog.Id.DRIVE, "volley after bounce becomes drive")
-	var no_smash := ShotCatalog.resolve_armed(ShotCatalog.Id.SMASH, false, 2.0, true)
-	failed += _expect(no_smash == ShotCatalog.Id.DRIVE, "low smash becomes drive")
+	failed += _expect(net_h > MatchRules.NET_HEIGHT, "standard hard ball clears the net")
+	var kitchen := MatchRules.zone_rect(0, 2)
+	failed += _expect(MatchRules.inclusive_in_rect(Vector2(5, 18), kitchen), "kitchen left zone")
+	failed += _expect(not MatchRules.inclusive_in_rect(Vector2(15, 18), kitchen), "kitchen left is not right")
+	var deep_right := MatchRules.zone_center(1, 0)
+	failed += _expect(deep_right.x > 10.0 and deep_right.y < 7.5, "deep right center")
+	failed += _expect(ShotCatalog.flight_time(ShotCatalog.Id.SOFT) > ShotCatalog.flight_time(ShotCatalog.Id.HARD), "soft is slower than hard")
 	var ball := RallyBall.new()
-	ball.launch(Vector2(15.0, 45.0), 2.8, Vector2(5.0, 7.5), ShotCatalog.Id.DRIVE)
+	ball.launch(Vector2(15.0, 45.0), 2.8, Vector2(5.0, 7.5), ShotCatalog.Id.HARD)
 	var frames := 0
 	var landed := false
 	while frames < 180 and ball.stage != RallyBall.Stage.DEAD:
@@ -44,7 +44,7 @@ func _init() -> void:
 		if ball.just_first_bounce:
 			landed = true
 			break
-	failed += _expect(landed, "drive serve reaches a first bounce")
+	failed += _expect(landed, "hard serve reaches a first bounce")
 	failed += _expect(MatchRules.inclusive_in_rect(ball.ground_pos, MatchRules.north_left_box()), "drive serve can land in north left box")
 	ball.free()
 	if failed == 0:

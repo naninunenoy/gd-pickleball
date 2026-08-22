@@ -10,21 +10,27 @@ You control both players on the bottom court at once. You do not walk a characte
 
 | Input | Meaning |
 |---|---|
-| WASD / left stick | Aim where a **return** will land |
-| Face buttons / IJKL | Choose the shot **and** hit |
+| WASD / D-pad / left stick | Choose a target **zone** on the opponent court |
+| Z / gamepad A | Soft hit (slow, high) |
+| X / gamepad B | Hard hit (fast, low) |
+| Space / Start | Pause |
 
-NESW is the face-button cluster (how you hit), not the D-pad.
+The opponent court is split into 6 zones: left/right by deep, mid, and kitchen.
 
-| Direction | Shot | Gamepad | PlayStation | Keyboard |
-|---|---|---|---|---|
-| North | Drive | Y | Triangle | **I** (also Up) |
-| South | Drop / dink | A | Cross | **K** (also Down) |
-| West | Smash | X | Square | **J** (also Left) |
-| East | Volley | B | Circle | **L** (also Right) |
+```
+W  deeper (toward their baseline)
+S  shorter (toward the net)
+A  left
+D  right
+```
 
-Keyboard: WASD is the left hand (aim), IJKL is the right hand (face buttons). That is the usual twin-stick layout. Arrow keys are extra aliases. **Space pauses** (Start on a gamepad).
+| | Left | Right |
+|---|---|---|
+| Deep | W+A | W+D |
+| Mid | A | D |
+| Kitchen | S+A | S+D |
 
-You must press a shot button to hit. If you never press, the ball bounces twice and you lose the point. CPU still returns on its own.
+Press Z or X to hit into the highlighted zone. If you never press, the ball bounces twice and you lose the point. CPU still returns on its own.
 
 ## Two-player movement
 
@@ -49,9 +55,9 @@ Hitter toggle and changing ends are not in this slice. Left stays left, right st
 
 - You do not aim the serve
 - There is no service fault
-- Press any shot button. The ball always lands deep in the legal diagonal box
-- Drive and drop only change the arc. Volley and smash become a drive
-- The receiver must let it bounce, then press a shot to return
+- Press Z or X. The ball always lands deep in the legal diagonal box
+- Soft/hard only changes the arc
+- The receiver must let it bounce, then press Z or X to return
 
 ## Double bounce
 
@@ -60,31 +66,29 @@ These two shots cannot be taken out of the air:
 1. Serve
 2. Return
 
-From the third shot, volleys are legal outside the kitchen. Press East / B / L while the ball is in the air.
+From the third shot, Z or X in the air is a volley if you are outside the kitchen. Soft is a soft volley. Hard is a punch or smash.
 
 ## Kitchen (NVZ)
 
 - There is a 7-foot kitchen on each side of the net
 - A volley in that area (including the line) is a fault
 - Entering after a bounce to hit is legal
-- Landing a dink in the kitchen is legal
+- Landing a soft ball in the kitchen is legal
 
 ## Shots
 
-WASD still aims the landing. The face button is how it gets there:
+Only two paces:
 
-- **Drive**: basic fast ball
-- **Drop / dink**: slow arc. Drop from the back, dink at the NVZ
-- **Volley**: cut it out of the air. Not on serve or return. Not in the kitchen
-- **Smash**: put away a high ball. Too low becomes a drive
+- **Soft (Z)**: slow and high. Use this to drop or dink
+- **Hard (X)**: fast and low. Use this to drive. A high ball becomes a smash
 
-The reticle can go out of court on returns. Aiming out makes an out. The serve reticle is hidden.
+WASD picks the zone. Z/X is how hard it gets there.
 
 ## When a point ends
 
 One of these awards a point:
 
-- Ball lands out (returns only)
+- Ball lands out (returns only; zones are in court)
 - Ball does not clear the net (returns only)
 - Kitchen volley
 - You do not press in time, second bounce
