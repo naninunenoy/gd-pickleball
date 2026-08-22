@@ -10,21 +10,26 @@ You control both players on the bottom court at once. You do not walk a characte
 
 | Input | Meaning |
 |---|---|
-| WASD / left stick | Aim where the ball will land |
-| Up | Drive (long, fast, low) |
-| Down | Drop / dink (short, slow, arcing) |
-| Right | Volley (take it out of the air when legal) |
-| Left | Smash (high balls only; otherwise becomes a drive) |
-| Space / Enter / gamepad A | Serve. After the match, rematch |
+| WASD / left stick | Aim where a **return** will land |
+| Face buttons / IJKL | Choose the shot **and** hit |
 
-NESW is how you hit, not where. Aim is on the movement keys.
+NESW is the face-button cluster (how you hit), not the D-pad.
 
-The last chosen shot stays selected. Default is drive. On contact, that shot flies toward the reticle. There is no timing window.
+| Direction | Shot | Gamepad | PlayStation | Keyboard |
+|---|---|---|---|---|
+| North | Drive | Y | Triangle | **I** (also Up) |
+| South | Drop / dink | A | Cross | **K** (also Down, Space) |
+| West | Smash | X | Square | **J** (also Left) |
+| East | Volley | B | Circle | **L** (also Right) |
+
+Keyboard: WASD is the left hand (aim), IJKL is the right hand (face buttons). That is the usual twin-stick layout. Arrow keys are extra aliases. Space is also South / A.
+
+You must press a shot button to hit. If you never press, the ball bounces twice and you lose the point. CPU still returns on its own.
 
 ## Two-player movement
 
 - Movement to the ball is automatic
-- The closer player takes the ball
+- The closer player is the one who can hit
 - The partner covers the open half
 - Both stay back until serve and return are done
 - After that, the off-ball player moves up to the kitchen line
@@ -42,10 +47,11 @@ Hitter toggle and changing ends are not in this slice. Left stays left, right st
 
 ## Serve
 
-- Aim the diagonal service box
-- Reticle outside the box is a fault
-- Net or out is a fault
-- The receiver must let it bounce
+- You do not aim the serve
+- There is no service fault
+- Press any shot button. The ball always lands deep in the legal diagonal box
+- Drive and drop only change the arc. Volley and smash become a drive
+- The receiver must let it bounce, then press a shot to return
 
 ## Double bounce
 
@@ -54,7 +60,7 @@ These two shots cannot be taken out of the air:
 1. Serve
 2. Return
 
-From the third shot, volleys are legal outside the kitchen. If a volley is not legal, the hitter waits for the bounce and then hits automatically.
+From the third shot, volleys are legal outside the kitchen. Press East / B / L while the ball is in the air.
 
 ## Kitchen (NVZ)
 
@@ -65,30 +71,29 @@ From the third shot, volleys are legal outside the kitchen. If a volley is not l
 
 ## Shots
 
-The same landing point still plays differently by shot:
+WASD still aims the landing. The face button is how it gets there:
 
 - **Drive**: basic fast ball
 - **Drop / dink**: slow arc. Drop from the back, dink at the NVZ
 - **Volley**: cut it out of the air. Not on serve or return. Not in the kitchen
 - **Smash**: put away a high ball. Too low becomes a drive
 
-The reticle can go out of court. Aiming out makes an out.
+The reticle can go out of court on returns. Aiming out makes an out. The serve reticle is hidden.
 
 ## When a point ends
 
 One of these awards a point:
 
-- Ball lands out
-- Ball does not clear the net
-- Serve misses the diagonal box
+- Ball lands out (returns only)
+- Ball does not clear the net (returns only)
 - Kitchen volley
-- Defense cannot reach, second bounce
+- You do not press in time, second bounce
 
-The opponent only returns. It aims near center and does not read you. Safe center shots keep the rally going. Winners come from open space or from aiming out.
+The opponent only returns. It aims near center and does not read you.
 
 ## Not in this slice
 
-- Timing that changes shot quality
+- Timing that changes shot quality (early / late grading)
 - Toggle who hits
 - Side change, side-out scoring, win-by-2, two-server rotation
 - Lobs, fakes, spin

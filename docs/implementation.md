@@ -6,11 +6,12 @@ All in-game strings must stay English. The project embeds `fonts/Inter-Regular.t
 
 ## What this slice must prove
 
-- Both partners are controlled as a team. WASD aims the landing, it does not move a player
-- NESW is shot type. Contact is automatic
-- Closest player hits. Partner covers the open half
+- Both partners are controlled as a team. WASD aims the **return** landing, it does not move a player
+- Face buttons (YAXB / IJKL) are shot type **and** the hit. Human contact is not automatic
+- Serves are not aimed. They always land at `MatchRules.serve_land_point`. No service fault
+- Closest player is the hitter. Partner covers the open half
 - Double bounce and NVZ volley faults are in from the start
-- Opponent AI only returns
+- Opponent AI only returns, and still auto-hits
 - Rally scoring, first to 11
 
 ## Layout
@@ -59,10 +60,10 @@ CPU odd:    CPU left = screen right serves, target = south-left box
 
 `main.gd` `Phase`:
 
-1. `SERVE_AIM` — aim with the reticle. Human serves with Space. CPU serves after a short wait
-2. `IN_FLIGHT` — flight or first bounce. Contact starts the next shot
+1. `SERVE_AIM` — no reticle. Human presses a face button; CPU waits, then serves to `serve_land_point`
+2. `IN_FLIGHT` — flight or first bounce. Human must press a shot while in range. CPU auto-returns after the bounce
 3. `POINT_END` — show the reason for about 1.4s
-4. `MATCH_END` — 11 points. Space rematches
+4. `MATCH_END` — 11 points. A shot button rematches
 
 `hits_completed` is the number of legal outbound hits.
 
@@ -77,13 +78,20 @@ Actions are registered in `main.gd` `_ensure_actions()`. Do not depend on the `p
 
 | action | role |
 |---|---|
-| `aim_*` | reticle. Do not use this to move athletes |
-| `shot_north/south/east/west` | armed shot, sticky |
-| `confirm` | serve and rematch only |
+| `aim_*` | return reticle. Hidden during your serve. Do not move athletes |
+| `shot_north` | Y / I / Up. Drive. Also starts a serve |
+| `shot_south` | A / K / Down / Space. Drop. Also starts a serve |
+| `shot_west` | X / J / Left. Smash |
+| `shot_east` | B / L / Right. Volley |
+| `confirm` | Enter rematch only |
 
-`toggle_hitter` is reserved and ignored. Do not add a timing window.
+Do not bind shots to the D-pad. NESW here is the face-button cluster.
 
-Default shot is drive. `VOLLEY` after a bounce becomes a drive (punch). `SMASH` without height becomes a drive.
+Human hits only on `just_pressed` while in range. `--auto-rally` presses Drive for the human so headless rallies still run.
+
+`toggle_hitter` is reserved and ignored. Do not add early/late quality windows yet.
+
+Default serve shot is drive. `VOLLEY` / `SMASH` on serve become drive. `VOLLEY` after a bounce becomes a drive (punch). `SMASH` without height becomes a drive.
 
 ## Ball
 
@@ -125,16 +133,16 @@ Required:
 - Court and NVZ
 - Four players, hitter ring
 - Ball, shadow, predicted land
-- Reticle (green in, red out)
+- Reticle on returns only (green in, red out). Hidden on your serve
 - Score and constraint (let it bounce / volley OK / NVZ)
-- Shot labels
+- Shot labels (YAXB / IJKL)
 
 ## Add later / do not add now
 
 OK in a later slice:
 
 - Hitter toggle (`toggle_hitter`)
-- A light timing window
+- A light timing-quality window (early / late)
 - Side change, side-out, win-by-2
 - Lob
 - Slight opponent aim variation

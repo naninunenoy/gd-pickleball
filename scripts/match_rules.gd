@@ -72,6 +72,15 @@ static func box_center(rect: Rect2) -> Vector2:
 	return rect.position + rect.size * 0.5
 
 
+## Deep center of the legal diagonal box. Serves always land here.
+static func serve_land_point(human_serving: bool, server_score: int) -> Vector2:
+	var box := serve_target_box(human_serving, server_score)
+	var x := box.position.x + box.size.x * 0.5
+	if box.position.y < NET_Y:
+		return Vector2(x, box.end.y - 2.8)
+	return Vector2(x, box.position.y + 2.8)
+
+
 static func volley_legal(hits_completed: int) -> bool:
 	return hits_completed >= 3
 

@@ -19,6 +19,7 @@ var map: CourtMap
 var just_first_bounce := false
 var just_second_bounce := false
 var just_net := false
+var ignore_net := false
 
 
 func hold(pos: Vector2, h: float) -> void:
@@ -35,7 +36,7 @@ func hold(pos: Vector2, h: float) -> void:
 	just_net = false
 
 
-func launch(from: Vector2, from_h: float, to: Vector2, shot: int) -> void:
+func launch(from: Vector2, from_h: float, to: Vector2, shot: int, skip_net: bool = false) -> void:
 	start_pos = from
 	land_pos = to
 	start_height = from_h
@@ -51,6 +52,7 @@ func launch(from: Vector2, from_h: float, to: Vector2, shot: int) -> void:
 	just_first_bounce = false
 	just_second_bounce = false
 	just_net = false
+	ignore_net = skip_net
 
 
 func predicted_land() -> Vector2:
@@ -88,7 +90,7 @@ func advance(delta: float) -> void:
 	var u := clampf(time / duration, 0.0, 1.0)
 	ground_pos = start_pos.lerp(land_pos, u)
 	height = height_on_path(u)
-	if stage == Stage.FLIGHT and _crossed_net():
+	if not ignore_net and stage == Stage.FLIGHT and _crossed_net():
 		var net_h := MatchRules.height_at_net(start_pos, land_pos, start_height, end_height, apex_extra)
 		if net_h >= 0.0 and net_h < MatchRules.NET_HEIGHT:
 			ground_pos = Vector2(ground_pos.x, MatchRules.NET_Y)
