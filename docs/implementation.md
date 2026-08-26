@@ -6,6 +6,9 @@ All in-game strings must stay English. The project embeds `fonts/Inter-Regular.t
 
 ## What this slice must prove
 
+- Overhead 2D is gone. The camera is a shoulder TPS that changes when the focused human is on the kitchen line
+- Away from the line the kitchen line is the look target. On the line the camera drops, pulls in, and reads ball height against the net
+- Arriving and stopping settles the camera. Running keeps a small shake
 - Both partners are controlled as a team. The mouse aims a free landing on the opponent court. It does not move a player
 - Click is soft, double-click is hard. Those two paces are the only swings. Human contact is not automatic
 - Serves are not aimed. They always land at `MatchRules.serve_land_point`. No service fault
@@ -20,13 +23,16 @@ All in-game strings must stay English. The project embeds `fonts/Inter-Regular.t
 ```
 docs/rules.md              player-facing rules
 docs/implementation.md     this note
-scripts/court_map.gd       feet to pixels
+scripts/court_map.gd       court feet to world (X, height Y, court-y Z)
 scripts/match_rules.gd     court geometry and legality, view-independent
 scripts/shot_catalog.gd    shot parameters
+scripts/kitchen_occupancy.gd  on-line / set / team kitchen labels
+scripts/camera_rig.gd      baseline vs kitchen TPS
 scripts/athlete.gd         one player; court_pos is feet
 scripts/ball.gd            landing-based flight, no physics engine
-scripts/court_view.gd      court draw
-scripts/reticle.gd         aim reticle
+scripts/court_3d.gd        3D court, net, kitchen-line emphasis
+scripts/reticle.gd         aim reticle on the ground
+scripts/minimap.gd         partner / kitchen overlay
 scripts/main.gd            match flow, input, AI, scoring
 scripts/check_slice.gd     headless sanity checks
 scenes/main.tscn           entry
@@ -36,17 +42,19 @@ New shots or rules belong in `match_rules.gd` / `shot_catalog.gd`. Do not pile m
 
 ## Coordinates
 
-Units are feet. Pixels are for drawing only.
+Units are feet. The 3D world is 1:1 with court feet. `CourtMap.to_world` maps court `(x, y)` to `Vector3(x, height, y)`.
 
 - `x = 0` left sideline, `x = 20` right sideline
-- `y = 0` top (CPU) baseline, `y = 44` bottom (player) baseline
+- `y = 0` north (CPU) baseline, `y = 44` south (player) baseline
 - Net `y = 22`
 - CPU NVZ: `y = 15 .. 22`
 - Player NVZ: `y = 22 .. 29`
 - Service boxes run 15 ft from baseline to NVZ line, 10 ft wide
 - Lines are in. Do not use `Rect2.has_point`; the far edge is half-open
 
-The player team is always south (bottom of the screen). Side change is not implemented. Do not swap ends.
+The player team is always south. Side change is not implemented. Do not swap ends.
+
+Mouse aim is a camera ray onto the ground plane `Y = 0`, then clamped to the north side of the net.
 
 CPU "right" is screen left (`x < 10`). Even/odd server side uses that team's own score.
 
@@ -85,7 +93,7 @@ Actions are registered in `main.gd` `_ensure_actions()`. Do not depend on the `p
 | `confirm` | Enter rematch only |
 | `pause` | Space / Start. Toggles pause. Does not hit |
 
-Mouse court position is clamped to the north side of the net and written to `reticle.court_pos`. Human returns use that point. Out of court is allowed so a miss can go out.
+Mouse court position is a camera ray onto the ground, clamped to the north side of the net, and written to `reticle.court_pos`. Human returns use that point. Out of court is allowed so a miss can go out.
 
 Human hits only while a swing is armed and the hitter is in range. `--auto-rally` presses Hard for the human so headless rallies still run.
 
@@ -127,16 +135,31 @@ Return only.
 - Volley when it is legal and the hitter is outside the NVZ. Otherwise wait for the bounce
 - Do not poach, hunt gaps, or vary pace on purpose
 
+## Camera
+
+`KitchenOccupancy.in_front_view` is the kitchen-camera trigger (on the line or closer to the net on your side). Baseline and transition stay on the pulled-back rig.
+
+`CameraRig.compose(focus, ball, blend)` is view-independent and unit-tested:
+
+- blend 0: higher, further back, look biased to the south kitchen line
+- blend 1: lower, over the shoulder, look biased to net / ball height, tighter FOV
+
+Shake scales with the focus athlete's speed and drops to zero when they are set on the line. Follow damping is faster when set so arriving is the stable moment.
+
+The focus athlete is the human server/receiver during serve, the human hitter while defending, and the human closer to the net after we hit (so the partner walking up to the line pulls the camera with them).
+
 ## HUD
 
 Required:
 
-- Court and NVZ
-- Four players, hitter ring
-- Ball, shadow, predicted land
+- 3D court, NVZ, and emphasized kitchen lines
+- Four players, hitter / set ring
+- Ball, shadow, height stem, predicted land
 - Free-aim reticle on the opponent court (hidden during your serve)
 - Score and constraint (let it bounce / volley OK / NVZ)
+- Kitchen occupancy (you / CPU / rally phase) and which camera is active
 - Soft / Hard labels
+- Minimap for partner spacing
 
 ## Add later / do not add now
 
@@ -160,6 +183,9 @@ Do not add now:
 ```bash
 godot --headless --path . -s res://scripts/check_slice.gd
 godot --headless --path . --quit-after 720 -- --auto-rally
+godot --path . --quit-after 180 -- --camera-preview
 ```
+
+`--camera-preview` snaps the baseline serve view, then both teams SET at the kitchen line, and writes `/tmp/gd-pickleball-baseline.png` and `/tmp/gd-pickleball-kitchen.png`.
 
 Web export is still `./scripts/export_web.sh`.

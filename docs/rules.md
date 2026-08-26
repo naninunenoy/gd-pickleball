@@ -4,6 +4,15 @@ Player-facing rules only. Implementation internals live in `docs/implementation.
 
 This version is not a full game. It repeats serve-to-rally points. First to 11 wins.
 
+## Camera
+
+The view is third-person, from behind your team. It is not a tennis-style overhead map.
+
+- Away from the kitchen: the camera sits higher and back so the kitchen line is the thing you are running toward
+- On the kitchen line: the camera drops, moves in, and looks across the net so ball height is the main thing you read
+- While you are still moving the camera is less stable. It settles when you arrive and stop
+- A small map in the corner shows both partners and the kitchen lines
+
 ## Controls
 
 You control both players on the bottom court at once. You do not walk a character directly.
