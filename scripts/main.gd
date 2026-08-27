@@ -42,6 +42,10 @@ var reticle: AimReticle
 @onready var pause_label: Label = $Pause/Label
 
 var _ui_font: Font
+var play_hud: PlayHud
+var _touch_until_msec := 0
+var _aim_from_touch := false
+var _last_view := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -49,15 +53,9 @@ func _ready() -> void:
 	_ensure_actions()
 	_apply_ui_font()
 	_spawn_world()
-	help_label.text = "\n".join([
-		"Mouse  aim",
-		"Click  soft",
-		"Double-click  hard",
-		"Space  pause",
-		"",
-		"3D camera. Moves in at the kitchen.",
-		"Movement is automatic.",
-	])
+	_build_play_hud()
+	_connect_pause_overlay()
+	_layout_hud(true)
 	_start_match()
 	if "--camera-preview" in OS.get_cmdline_args() or "--camera-preview" in OS.get_cmdline_user_args():
 		_run_camera_preview()
@@ -83,6 +81,7 @@ func _make_athlete(team: int, side: int) -> Athlete:
 
 
 func _process(delta: float) -> void:
+	_layout_hud(false)
 	_poll_input(delta)
 	if paused:
 		_sync_visuals(delta, true)
@@ -137,22 +136,38 @@ func _poll_input(delta: float) -> void:
 			_start_match()
 	if Input.is_action_just_pressed("confirm") and phase == Phase.MATCH_END:
 		_start_match()
-	_aim_with_mouse()
+	if not _aim_from_touch and not _pointer_on_minimap():
+		_aim_with_mouse()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_R:
 		_start_match()
 		get_viewport().set_input_as_handled()
-
-
-func _input(event: InputEvent) -> void:
+		return
+	if event is InputEventScreenTouch:
+		_note_touch()
+		if event.pressed:
+			if phase == Phase.MATCH_END:
+				_start_match()
+			elif not paused:
+				_aim_at_screen(event.position)
+		get_viewport().set_input_as_handled()
+		return
+	if event is InputEventScreenDrag:
+		_note_touch()
+		if not paused:
+			_aim_at_screen(event.position)
+		get_viewport().set_input_as_handled()
+		return
 	if paused:
 		return
 	if not (event is InputEventMouseButton):
 		return
 	var mouse := event as InputEventMouseButton
 	if not mouse.pressed or mouse.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if not _mouse_swing_allowed():
 		return
 	if phase == Phase.MATCH_END:
 		_start_match()
@@ -161,6 +176,13 @@ func _input(event: InputEvent) -> void:
 		_arm_swing(ShotCatalog.Id.HARD, true)
 	else:
 		_arm_swing(ShotCatalog.Id.SOFT, false)
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch or event is InputEventScreenDrag:
+		_note_touch()
+	elif event is InputEventMouseMotion and event.relative.length() > 0.01 and _mouse_swing_allowed():
+		_aim_from_touch = false
 
 
 func _arm_swing(shot: int, immediate: bool) -> void:
@@ -184,13 +206,171 @@ func _clear_swing() -> void:
 func _aim_with_mouse() -> void:
 	if phase == Phase.MATCH_END or (phase == Phase.SERVE_AIM and human_serving):
 		return
-	var hit: Variant = camera_rig.mouse_to_court(get_viewport().get_mouse_position())
+	_set_aim_from_hit(camera_rig.mouse_to_court(get_viewport().get_mouse_position()))
+
+
+func _aim_at_screen(screen: Vector2) -> void:
+	if phase == Phase.MATCH_END or (phase == Phase.SERVE_AIM and human_serving):
+		return
+	if play_hud != null and play_hud.covers(screen):
+		return
+	_set_aim_from_hit(camera_rig.mouse_to_court(screen))
+
+
+func _set_aim_from_hit(hit: Variant) -> void:
 	if hit == null:
 		return
-	var court_pos: Vector2 = hit
-	court_pos.x = clampf(court_pos.x, -2.0, 22.0)
-	court_pos.y = clampf(court_pos.y, -2.0, MatchRules.NET_Y - 0.35)
-	reticle.court_pos = court_pos
+	reticle.court_pos = CourtMap.clamp_aim(hit)
+
+
+func _on_minimap_aim(court_pos: Vector2) -> void:
+	if paused or phase == Phase.MATCH_END or (phase == Phase.SERVE_AIM and human_serving):
+		return
+	_note_touch()
+	reticle.court_pos = CourtMap.clamp_aim(court_pos)
+
+
+func _on_hud_shot(shot: int) -> void:
+	if paused:
+		return
+	if phase == Phase.MATCH_END:
+		_start_match()
+		return
+	_arm_swing(shot, true)
+
+
+func _on_hud_pause() -> void:
+	if phase == Phase.MATCH_END:
+		return
+	paused = not paused
+	_set_paused_visible(paused)
+
+
+func _note_touch() -> void:
+	_aim_from_touch = true
+	_touch_until_msec = Time.get_ticks_msec() + 500
+
+
+func _mouse_swing_allowed() -> bool:
+	return Time.get_ticks_msec() > _touch_until_msec
+
+
+func _pointer_on_minimap() -> bool:
+	if minimap == null or not minimap.visible:
+		return false
+	return minimap.get_global_rect().has_point(get_viewport().get_mouse_position())
+
+
+func _build_play_hud() -> void:
+	play_hud = PlayHud.new()
+	add_child(play_hud)
+	play_hud.apply_font(_ui_font)
+	play_hud.shot_pressed.connect(_on_hud_shot)
+	play_hud.pause_pressed.connect(_on_hud_pause)
+	minimap.aim_at.connect(_on_minimap_aim)
+
+
+func _connect_pause_overlay() -> void:
+	var dim := pause_layer.get_node_or_null("Dim") as ColorRect
+	if dim == null:
+		return
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(_on_pause_dim_input)
+
+
+func _on_pause_dim_input(event: InputEvent) -> void:
+	var tap := false
+	if event is InputEventScreenTouch:
+		_note_touch()
+		tap = event.pressed
+	elif event is InputEventMouseButton:
+		tap = event.pressed and event.button_index == MOUSE_BUTTON_LEFT and _mouse_swing_allowed()
+	if tap and paused:
+		paused = false
+		_set_paused_visible(false)
+		get_viewport().set_input_as_handled()
+
+
+func _is_compact() -> bool:
+	var view := get_viewport_rect().size
+	return view.x < 920.0 or view.y < 580.0
+
+
+func _pointer_copy() -> bool:
+	return _is_compact() or DisplayServer.is_touchscreen_available()
+
+
+func _layout_hud(force: bool) -> void:
+	var view := get_viewport_rect().size
+	if not force and view == _last_view:
+		return
+	_last_view = view
+	var compact := view.x < 920.0 or view.y < 580.0
+	var short := view.y < 520.0
+	if play_hud != null:
+		play_hud.layout(view)
+	var bar := play_hud.button_bar_height() if play_hud != null else 0.0
+	_pin_label(score_label, 16.0 if compact else 28.0, 12.0 if compact else 24.0, 300.0, 48.0 if compact else 64.0)
+	_pin_label(status_label, 16.0 if compact else 28.0, 56.0 if compact else 96.0, 280.0, 60.0 if compact else 84.0)
+	_pin_label(reason_label, 16.0 if compact else 28.0, 112.0 if compact else 188.0, 280.0, 40.0)
+	help_label.visible = not compact
+	shots_label.visible = false
+	kitchen_label.visible = not short
+	if compact:
+		if short:
+			kitchen_label.visible = false
+			minimap.offset_left = 10.0
+			minimap.offset_right = 100.0
+			minimap.offset_top = -148.0
+			minimap.offset_bottom = -10.0
+		else:
+			_pin_label(kitchen_label, 16.0, 152.0, 320.0, 56.0)
+			minimap.offset_left = 12.0
+			minimap.offset_right = 122.0
+			minimap.offset_top = -(bar + 12.0 + 176.0)
+			minimap.offset_bottom = -(bar + 12.0)
+		minimap.anchor_left = 0.0
+		minimap.anchor_right = 0.0
+		minimap.anchor_top = 1.0
+		minimap.anchor_bottom = 1.0
+		score_label.add_theme_font_size_override("font_size", 20)
+		status_label.add_theme_font_size_override("font_size", 16)
+		reason_label.add_theme_font_size_override("font_size", 16)
+		kitchen_label.add_theme_font_size_override("font_size", 15)
+	else:
+		kitchen_label.offset_left = 28.0
+		kitchen_label.offset_top = 248.0
+		kitchen_label.offset_right = 420.0
+		kitchen_label.offset_bottom = 390.0
+		minimap.anchor_left = 0.0
+		minimap.anchor_right = 0.0
+		minimap.anchor_top = 1.0
+		minimap.anchor_bottom = 1.0
+		minimap.offset_left = 24.0
+		minimap.offset_right = 184.0
+		minimap.offset_top = -286.0
+		minimap.offset_bottom = -24.0
+		score_label.add_theme_font_size_override("font_size", 28)
+		status_label.add_theme_font_size_override("font_size", 22)
+		reason_label.add_theme_font_size_override("font_size", 22)
+		kitchen_label.add_theme_font_size_override("font_size", 20)
+		help_label.text = "\n".join([
+			"Drag or mouse  aim",
+			"Soft / Hard  hit",
+			"Click  soft",
+			"Double-click  hard",
+			"Pause / Space  pause",
+			"",
+			"Minimap drag also aims.",
+			"Movement is automatic.",
+		])
+
+
+func _pin_label(label: Label, left: float, top: float, width: float, height: float) -> void:
+	label.offset_left = left
+	label.offset_top = top
+	label.offset_right = left + width
+	label.offset_bottom = top + height
 
 
 func _can_volley_now() -> bool:
@@ -522,14 +702,18 @@ func _sync_visuals(delta: float, snap_camera: bool) -> void:
 func _update_ui() -> void:
 	score_label.text = "You  %d  -  %d  CPU" % [human_score, cpu_score]
 	reason_label.text = point_reason
+	var tap := _pointer_copy()
+	if play_hud != null:
+		play_hud.set_armed(armed)
+		play_hud.set_paused(paused)
 	if paused:
-		status_label.text = "Paused\nSpace to resume"
+		status_label.text = "Paused\n%s to resume" % ("Tap" if tap else "Space")
 	elif phase == Phase.MATCH_END:
 		var winner := "You win" if human_score > cpu_score else "CPU wins"
-		status_label.text = "Match over  %s\nClick to rematch" % winner
+		status_label.text = "Match over  %s\n%s to rematch" % [winner, "Tap" if tap else "Click"]
 	elif phase == Phase.SERVE_AIM:
 		if human_serving:
-			status_label.text = "Your serve\nClick to serve"
+			status_label.text = "Your serve\n%s to serve" % ("Soft / Hard" if tap else "Click")
 		else:
 			status_label.text = "CPU serve"
 	elif phase == Phase.POINT_END:
@@ -544,21 +728,21 @@ func _update_ui() -> void:
 			status_label.text = "NVZ\nNo volley"
 		else:
 			status_label.text = "Volley OK"
-	var lines: PackedStringArray = ["Hit"]
-	lines.append(_shot_row(ShotCatalog.Id.SOFT, "Click", "Soft"))
-	lines.append(_shot_row(ShotCatalog.Id.HARD, "Double", "Hard"))
-	shots_label.text = "\n".join(lines)
+	pause_label.text = "Paused\n%s to resume" % ("Tap" if tap else "Space")
 	var view_name := "kitchen line" if camera_rig.last_on_kitchen else "pulled back"
 	if camera_rig.last_on_kitchen and camera_rig.last_set:
 		view_name = "kitchen SET"
 	var ball_h := _ball_height_label()
-	kitchen_label.text = "\n".join([
-		KitchenOccupancy.rally_phase(human_left, human_right, cpu_left, cpu_right),
-		"You  %s" % KitchenOccupancy.describe_team(human_left, human_right),
-		"CPU  %s" % KitchenOccupancy.describe_team(cpu_left, cpu_right),
-		"View  %s" % view_name,
-		ball_h,
-	])
+	if _is_compact():
+		kitchen_label.text = "%s\n%s" % [KitchenOccupancy.rally_phase(human_left, human_right, cpu_left, cpu_right), ball_h]
+	else:
+		kitchen_label.text = "\n".join([
+			KitchenOccupancy.rally_phase(human_left, human_right, cpu_left, cpu_right),
+			"You  %s" % KitchenOccupancy.describe_team(human_left, human_right),
+			"CPU  %s" % KitchenOccupancy.describe_team(cpu_left, cpu_right),
+			"View  %s" % view_name,
+			ball_h,
+		])
 
 
 func _ball_height_label() -> String:
@@ -569,11 +753,6 @@ func _ball_height_label() -> String:
 	if ball.height < MatchRules.NET_HEIGHT:
 		return "Ball  low — reset"
 	return "Ball  chest"
-
-
-func _shot_row(id: int, key: String, name: String) -> String:
-	var mark := ">" if armed == id else " "
-	return "%s %s  %s" % [mark, key, name]
 
 
 func _key_event(key: Key) -> InputEventKey:
@@ -605,6 +784,8 @@ func _setup_action(name: String, events: Array) -> void:
 
 func _set_paused_visible(show: bool) -> void:
 	pause_layer.visible = show
+	if play_hud != null:
+		play_hud.set_paused(show)
 
 
 func _run_camera_preview() -> void:

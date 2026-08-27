@@ -6,7 +6,7 @@ Third-person pickleball doubles. One 3D kitchen view: the camera pulls back unti
 - Implementation notes: [`docs/implementation.md`](docs/implementation.md)
 - Design discussion (phases, kitchen, camera hypotheses): [`docs/design-discussion.md`](docs/design-discussion.md)
 
-Mouse aims on the opponent court. Click is a soft hit, double-click is a hard hit. If a volley is legal, take it in the air. Serves always land in the legal box; there is no service fault.
+Mouse or a finger aims on the opponent court. Click is a soft hit, double-click is a hard hit. On a phone, drag to aim and tap Soft / Hard. If a volley is legal, take it in the air. Serves always land in the legal box; there is no service fault.
 
 In-game text is English only. `fonts/Inter-Regular.ttf` is the UI font so labels stay readable in the web build.
 
@@ -31,6 +31,7 @@ Limits:
 - Web is Compatibility renderer / WebGL 2.0 only
 - Godot 4 C# does not export to web. This repo is GDScript only
 - No-threads builds are slower than threaded ones
+- Phones: drag to aim, tap Soft / Hard to hit. Landscape or portrait. Add the page to the home screen if you want it fullscreen
 
 Public URL after Pages is enabled:
 
