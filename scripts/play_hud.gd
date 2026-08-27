@@ -12,6 +12,7 @@ var _root: Control
 var _font: Font
 var _compact := false
 var _short := false
+var _bar_vp := 0.0
 var _lock_until_msec := 0
 
 
@@ -65,30 +66,35 @@ func is_compact() -> bool:
 
 
 func button_bar_height() -> float:
-	return 88.0 if _compact and not _short else 0.0
+	return _bar_vp
 
 
-func layout(view: Vector2) -> void:
+func layout(view: Vector2, window: Vector2 = Vector2.ZERO) -> void:
 	if soft_btn == null:
 		return
-	_compact = view.x < 920.0 or view.y < 580.0
-	_short = view.y < 520.0
-	var margin := 14.0 if _compact else 16.0
-	var font_size := 22 if _compact else 20
+	if window.x < 1.0 or window.y < 1.0:
+		window = view
+	_compact = window.x < 920.0 or window.y < 580.0
+	_short = window.y < 520.0
+	var scale := view.y / window.y if window.y > 1.0 else 1.0
+	var margin := (14.0 if _compact else 16.0) * scale
+	var font_size := maxi(16, int(round((22.0 if _compact else 20.0) * scale)))
 	for btn in [soft_btn, hard_btn, pause_btn]:
 		btn.add_theme_font_size_override("font_size", font_size)
-	var pause_w := 108.0 if _compact else 96.0
-	var pause_h := 48.0 if _compact else 40.0
+	var pause_w := (108.0 if _compact else 96.0) * scale
+	var pause_h := (48.0 if _compact else 40.0) * scale
 	_pin_top_right(pause_btn, margin, pause_w, pause_h)
 	if _compact and not _short:
-		var btn_h := 72.0
+		var btn_h := 72.0 * scale
+		_bar_vp = margin + btn_h
 		_pin_bottom_split(soft_btn, true, margin, btn_h)
 		_pin_bottom_split(hard_btn, false, margin, btn_h)
 	else:
-		var w := 132.0 if not _compact else 118.0
-		var h := 48.0 if not _compact else 52.0
-		_pin_top_right_stack(soft_btn, margin, pause_h + 10.0, w, h)
-		_pin_top_right_stack(hard_btn, margin, pause_h + 10.0 + h + 8.0, w, h)
+		_bar_vp = 0.0
+		var w := (132.0 if not _compact else 118.0) * scale
+		var h := (48.0 if not _compact else 52.0) * scale
+		_pin_top_right_stack(soft_btn, margin, pause_h + 10.0 * scale, w, h)
+		_pin_top_right_stack(hard_btn, margin, pause_h + 10.0 * scale + h + 8.0 * scale, w, h)
 
 
 func _pin_top_right(btn: Button, margin: float, w: float, h: float) -> void:

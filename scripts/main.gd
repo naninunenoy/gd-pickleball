@@ -46,6 +46,7 @@ var play_hud: PlayHud
 var _touch_until_msec := 0
 var _aim_from_touch := false
 var _last_view := Vector2.ZERO
+var _last_window := Vector2.ZERO
 
 
 func _ready() -> void:
@@ -291,9 +292,24 @@ func _on_pause_dim_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 
+func _window_size() -> Vector2:
+	var w := Vector2(DisplayServer.window_get_size())
+	if w.x < 1.0 or w.y < 1.0:
+		return get_viewport().get_visible_rect().size
+	return w
+
+
+func _ui_scale() -> float:
+	var window := _window_size()
+	var view := get_viewport().get_visible_rect().size
+	if window.y < 1.0:
+		return 1.0
+	return view.y / window.y
+
+
 func _is_compact() -> bool:
-	var view := get_viewport_rect().size
-	return view.x < 920.0 or view.y < 580.0
+	var window := _window_size()
+	return window.x < 920.0 or window.y < 580.0
 
 
 func _pointer_copy() -> bool:
@@ -301,59 +317,63 @@ func _pointer_copy() -> bool:
 
 
 func _layout_hud(force: bool) -> void:
-	var view := get_viewport_rect().size
-	if not force and view == _last_view:
+	var view := get_viewport().get_visible_rect().size
+	var window := _window_size()
+	if not force and view == _last_view and window == _last_window:
 		return
 	_last_view = view
-	var compact := view.x < 920.0 or view.y < 580.0
-	var short := view.y < 520.0
+	_last_window = window
+	var compact := window.x < 920.0 or window.y < 580.0
+	var short := window.y < 520.0
+	var scale := _ui_scale()
 	if play_hud != null:
-		play_hud.layout(view)
+		play_hud.layout(view, window)
 	var bar := play_hud.button_bar_height() if play_hud != null else 0.0
-	_pin_label(score_label, 16.0 if compact else 28.0, 12.0 if compact else 24.0, 300.0, 48.0 if compact else 64.0)
-	_pin_label(status_label, 16.0 if compact else 28.0, 56.0 if compact else 96.0, 280.0, 60.0 if compact else 84.0)
-	_pin_label(reason_label, 16.0 if compact else 28.0, 112.0 if compact else 188.0, 280.0, 40.0)
+	_pin_label(score_label, (16.0 if compact else 28.0) * scale, (12.0 if compact else 24.0) * scale, (300.0 if compact else 332.0) * scale, (48.0 if compact else 64.0) * scale)
+	_pin_label(status_label, (16.0 if compact else 28.0) * scale, (56.0 if compact else 96.0) * scale, 280.0 * scale, (60.0 if compact else 84.0) * scale)
+	_pin_label(reason_label, (16.0 if compact else 28.0) * scale, (112.0 if compact else 188.0) * scale, 280.0 * scale, 40.0 * scale)
 	help_label.visible = not compact
 	shots_label.visible = false
 	kitchen_label.visible = not short
 	if compact:
 		if short:
 			kitchen_label.visible = false
-			minimap.offset_left = 10.0
-			minimap.offset_right = 100.0
-			minimap.offset_top = -148.0
-			minimap.offset_bottom = -10.0
+			minimap.offset_left = 10.0 * scale
+			minimap.offset_right = 100.0 * scale
+			minimap.offset_top = -148.0 * scale
+			minimap.offset_bottom = -10.0 * scale
 		else:
-			_pin_label(kitchen_label, 16.0, 152.0, 320.0, 56.0)
-			minimap.offset_left = 12.0
-			minimap.offset_right = 122.0
-			minimap.offset_top = -(bar + 12.0 + 176.0)
-			minimap.offset_bottom = -(bar + 12.0)
+			_pin_label(kitchen_label, 16.0 * scale, 152.0 * scale, 320.0 * scale, 56.0 * scale)
+			minimap.offset_left = 12.0 * scale
+			minimap.offset_right = 122.0 * scale
+			minimap.offset_top = -(bar + 12.0 * scale + 176.0 * scale)
+			minimap.offset_bottom = -(bar + 12.0 * scale)
 		minimap.anchor_left = 0.0
 		minimap.anchor_right = 0.0
 		minimap.anchor_top = 1.0
 		minimap.anchor_bottom = 1.0
-		score_label.add_theme_font_size_override("font_size", 20)
-		status_label.add_theme_font_size_override("font_size", 16)
-		reason_label.add_theme_font_size_override("font_size", 16)
-		kitchen_label.add_theme_font_size_override("font_size", 15)
+		score_label.add_theme_font_size_override("font_size", maxi(16, int(round(20.0 * scale))))
+		status_label.add_theme_font_size_override("font_size", maxi(14, int(round(16.0 * scale))))
+		reason_label.add_theme_font_size_override("font_size", maxi(14, int(round(16.0 * scale))))
+		kitchen_label.add_theme_font_size_override("font_size", maxi(13, int(round(15.0 * scale))))
 	else:
-		kitchen_label.offset_left = 28.0
-		kitchen_label.offset_top = 248.0
-		kitchen_label.offset_right = 420.0
-		kitchen_label.offset_bottom = 390.0
+		kitchen_label.offset_left = 28.0 * scale
+		kitchen_label.offset_top = 248.0 * scale
+		kitchen_label.offset_right = 420.0 * scale
+		kitchen_label.offset_bottom = 390.0 * scale
 		minimap.anchor_left = 0.0
 		minimap.anchor_right = 0.0
 		minimap.anchor_top = 1.0
 		minimap.anchor_bottom = 1.0
-		minimap.offset_left = 24.0
-		minimap.offset_right = 184.0
-		minimap.offset_top = -286.0
-		minimap.offset_bottom = -24.0
-		score_label.add_theme_font_size_override("font_size", 28)
-		status_label.add_theme_font_size_override("font_size", 22)
-		reason_label.add_theme_font_size_override("font_size", 22)
-		kitchen_label.add_theme_font_size_override("font_size", 20)
+		minimap.offset_left = 24.0 * scale
+		minimap.offset_right = 184.0 * scale
+		minimap.offset_top = -286.0 * scale
+		minimap.offset_bottom = -24.0 * scale
+		score_label.add_theme_font_size_override("font_size", maxi(18, int(round(28.0 * scale))))
+		status_label.add_theme_font_size_override("font_size", maxi(16, int(round(22.0 * scale))))
+		reason_label.add_theme_font_size_override("font_size", maxi(16, int(round(22.0 * scale))))
+		kitchen_label.add_theme_font_size_override("font_size", maxi(14, int(round(20.0 * scale))))
+		help_label.add_theme_font_size_override("font_size", maxi(14, int(round(18.0 * scale))))
 		help_label.text = "\n".join([
 			"Drag or mouse  aim",
 			"Soft / Hard  hit",

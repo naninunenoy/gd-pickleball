@@ -102,7 +102,7 @@ Actions are registered in `main.gd` `_ensure_actions()`. Do not depend on the `p
 
 Mouse court position is a camera ray onto the ground, clamped to the north side of the net, and written to `reticle.court_pos`. Human returns use that point. Out of court is allowed so a miss can go out.
 
-On a tall/narrow viewport the camera uses `KEEP_WIDTH` so the court stays in frame. Compact layouts move Soft / Hard to the bottom and shrink the HUD.
+On a tall/narrow window the camera uses `KEEP_WIDTH` so the court stays in frame. Compact layouts use the window size (not the stretched viewport) and scale HUD pixels so Soft / Hard stay thumb-sized. Portrait puts those buttons at the bottom. Landscape phones keep them on the right.
 
 Human hits only while a swing is armed and the hitter is in range. `--auto-rally` presses Hard for the human so headless rallies still run.
 
