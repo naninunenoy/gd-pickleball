@@ -55,7 +55,7 @@ func _ready() -> void:
 		"Double-click  hard",
 		"Space  pause",
 		"",
-		"Camera drops at the kitchen line.",
+		"3D camera. Moves in at the kitchen.",
 		"Movement is automatic.",
 	])
 	_start_match()
@@ -548,7 +548,7 @@ func _update_ui() -> void:
 	lines.append(_shot_row(ShotCatalog.Id.SOFT, "Click", "Soft"))
 	lines.append(_shot_row(ShotCatalog.Id.HARD, "Double", "Hard"))
 	shots_label.text = "\n".join(lines)
-	var view_name := "kitchen line" if camera_rig.last_on_kitchen else "baseline"
+	var view_name := "kitchen line" if camera_rig.last_on_kitchen else "pulled back"
 	if camera_rig.last_on_kitchen and camera_rig.last_set:
 		view_name = "kitchen SET"
 	var ball_h := _ball_height_label()

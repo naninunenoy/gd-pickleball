@@ -1,6 +1,6 @@
 # gd-pickleball
 
-Third-person pickleball doubles. The camera sits back until you reach the kitchen line, then drops and looks across the net. This version repeats serve-to-rally points. First to 11.
+Third-person pickleball doubles. One 3D kitchen view: the camera pulls back until you reach the line, then moves in. This version repeats serve-to-rally points. First to 11.
 
 - Player rules: [`docs/rules.md`](docs/rules.md)
 - Implementation notes: [`docs/implementation.md`](docs/implementation.md)

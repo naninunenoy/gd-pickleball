@@ -6,8 +6,8 @@ All in-game strings must stay English. The project embeds `fonts/Inter-Regular.t
 
 ## What this slice must prove
 
-- Overhead 2D is gone. The camera is a shoulder TPS that changes when the focused human is on the kitchen line
-- Away from the line the kitchen line is the look target. On the line the camera drops, pulls in, and reads ball height against the net
+- Overhead 2D is gone. One 3D TPS (the kitchen view); only the camera pose changes
+- Away from the line the same camera pulls back and up so the kitchen is ahead. On the line it moves in and reads ball height against the net
 - Arriving and stopping settles the camera. Running keeps a small shake
 - Both partners are controlled as a team. The mouse aims a free landing on the opponent court. It does not move a player
 - Click is soft, double-click is hard. Those two paces are the only swings. Human contact is not automatic
@@ -137,14 +137,14 @@ Return only.
 
 ## Camera
 
-`KitchenOccupancy.in_front_view` is the kitchen-camera trigger (on the line or closer to the net on your side). Baseline and transition stay on the pulled-back rig.
+`KitchenOccupancy.in_front_view` is the kitchen-camera trigger (on the line or closer to the net on your side). Baseline and transition use the same 3D TPS, pulled back.
 
 `CameraRig.compose(focus, ball, blend)` is view-independent and unit-tested:
 
-- blend 0: higher, further back, look biased to the south kitchen line
-- blend 1: lower, over the shoulder, look biased to net / ball height, tighter FOV
+- blend 0: same kitchen 3D view, further back and a bit higher, looking at play height toward the kitchen
+- blend 1: close over the shoulder, looking at net / ball height
 
-Shake scales with the focus athlete's speed and drops to zero when they are set on the line. Follow damping is faster when set so arriving is the stable moment.
+There is no separate 2D renderer for the main view. Shake scales with the focus athlete's speed and drops to zero when they are set on the line. Follow damping is faster when set so arriving is the stable moment.
 
 The focus athlete is the human server/receiver during serve, the human hitter while defending, and the human closer to the net after we hit (so the partner walking up to the line pulls the camera with them).
 

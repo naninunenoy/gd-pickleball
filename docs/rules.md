@@ -6,10 +6,10 @@ This version is not a full game. It repeats serve-to-rally points. First to 11 w
 
 ## Camera
 
-The view is third-person, from behind your team. It is not a tennis-style overhead map.
+The game is always the kitchen 3D view. There is no 2D overhead. Away from the kitchen the same camera sits further back and a bit higher so you can see the line you are running to. On the line it moves in and looks across the net.
 
-- Away from the kitchen: the camera sits higher and back so the kitchen line is the thing you are running toward
-- On the kitchen line: the camera drops, moves in, and looks across the net so ball height is the main thing you read
+- Away from the kitchen: pulled back, still third-person 3D
+- On the kitchen line: closer and lower, ball height against the net
 - While you are still moving the camera is less stable. It settles when you arrive and stop
 - A small map in the corner shows both partners and the kitchen lines
 

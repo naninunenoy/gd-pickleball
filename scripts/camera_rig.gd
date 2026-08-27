@@ -1,15 +1,15 @@
 class_name CameraRig
 extends Node3D
 
-## Two rigs: pulled-back when away from the kitchen, low TPS when on the line.
-## Blend 0 = baseline / approach. Blend 1 = kitchen line.
+## One 3D TPS (the kitchen view). Blend only moves the camera.
+## 0 = pulled back / a bit higher so the kitchen is ahead. 1 = on the line.
 
-const BACK_HEIGHT := 9.4
-const BACK_PULL := 12.0
-const BACK_SIDE := 2.6
-const BACK_LOOK_HEIGHT := 1.6
-const BACK_FOV := 68.0
-const BACK_FOLLOW := 3.4
+const BACK_HEIGHT := 7.6
+const BACK_PULL := 9.5
+const BACK_SIDE := 1.55
+const BACK_LOOK_HEIGHT := 3.0
+const BACK_FOV := 54.0
+const BACK_FOLLOW := 3.6
 
 const KITCHEN_HEIGHT := 4.7
 const KITCHEN_PULL := 3.15
@@ -20,8 +20,8 @@ const KITCHEN_FOLLOW := 9.2
 
 @onready var camera: Camera3D = $Camera3D
 
-var _pos := Vector3(10.0, 9.4, 52.0)
-var _look := Vector3(10.0, 1.6, 29.0)
+var _pos := Vector3(11.6, 7.6, 50.1)
+var _look := Vector3(10.0, 3.0, 29.0)
 var _fov := BACK_FOV
 var _blend := 0.0
 var _clock := 0.0
@@ -38,20 +38,11 @@ static func compose(focus_court: Vector2, ball_world: Vector3, blend: float) -> 
 	var side := toward_center * lerpf(BACK_SIDE, KITCHEN_SIDE, t)
 	var fov := lerpf(BACK_FOV, KITCHEN_FOV, t)
 	var pos := Vector3(focus_court.x + side, height, focus_court.y + pull)
-	var back_look := Vector3(focus_court.x, BACK_LOOK_HEIGHT, MatchRules.NVZ_SOUTH).lerp(
-		Vector3(ball_world.x, clampf(ball_world.y, 0.7, 5.5), ball_world.z),
-		0.32
-	)
-	var net_look := Vector3(
-		lerpf(focus_court.x, MatchRules.HALF, 0.22),
-		KITCHEN_LOOK_HEIGHT,
-		MatchRules.NET_Y - 1.8
-	)
-	var kitchen_look := net_look.lerp(
-		Vector3(ball_world.x, maxf(ball_world.y, 1.4), ball_world.z),
-		0.58
-	)
-	var look: Vector3 = back_look.lerp(kitchen_look, t)
+	var look_y := lerpf(BACK_LOOK_HEIGHT, KITCHEN_LOOK_HEIGHT, t)
+	var look_z := lerpf(MatchRules.NVZ_SOUTH, MatchRules.NET_Y - 1.8, t)
+	var scene_look := Vector3(lerpf(focus_court.x, MatchRules.HALF, 0.2), look_y, look_z)
+	var ball_look := Vector3(ball_world.x, maxf(ball_world.y, 1.4), ball_world.z)
+	var look: Vector3 = scene_look.lerp(ball_look, lerpf(0.28, 0.58, t))
 	return {"pos": pos, "look": look, "fov": fov}
 
 
