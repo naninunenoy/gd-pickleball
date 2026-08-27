@@ -1,4 +1,4 @@
-extends Node2D
+extends Node3D
 
 enum Phase { SERVE_AIM, IN_FLIGHT, POINT_END, MATCH_END }
 
@@ -6,7 +6,6 @@ const POINT_PAUSE := 1.45
 const CPU_SERVE_DELAY := 0.8
 const DOUBLE_CLICK := 0.2
 
-var map := CourtMap.new()
 var phase: Phase = Phase.SERVE_AIM
 var human_score := 0
 var cpu_score := 0
@@ -29,13 +28,16 @@ var cpu_right: Athlete
 var ball: RallyBall
 var reticle: AimReticle
 
-@onready var court_view: CourtView = $CourtView
-@onready var world: Node2D = $World
+@onready var court: Court3D = $World/Court
+@onready var world: Node3D = $World
+@onready var camera_rig: CameraRig = $CameraRig
 @onready var score_label: Label = $UI/Score
 @onready var status_label: Label = $UI/Status
 @onready var shots_label: Label = $UI/Shots
 @onready var help_label: Label = $UI/Help
 @onready var reason_label: Label = $UI/Reason
+@onready var kitchen_label: Label = $UI/Kitchen
+@onready var minimap: Minimap = $UI/Minimap
 @onready var pause_layer: CanvasLayer = $Pause
 @onready var pause_label: Label = $Pause/Label
 
@@ -46,8 +48,6 @@ func _ready() -> void:
 	auto_rally = "--auto-rally" in OS.get_cmdline_args() or "--auto-rally" in OS.get_cmdline_user_args()
 	_ensure_actions()
 	_apply_ui_font()
-	map.configure(get_viewport_rect().size)
-	court_view.map = map
 	_spawn_world()
 	help_label.text = "\n".join([
 		"Mouse  aim",
@@ -55,10 +55,12 @@ func _ready() -> void:
 		"Double-click  hard",
 		"Space  pause",
 		"",
-		"Volley is taken in the air.",
+		"3D camera. Moves in at the kitchen.",
 		"Movement is automatic.",
 	])
 	_start_match()
+	if "--camera-preview" in OS.get_cmdline_args() or "--camera-preview" in OS.get_cmdline_user_args():
+		_run_camera_preview()
 
 
 func _spawn_world() -> void:
@@ -67,30 +69,23 @@ func _spawn_world() -> void:
 	cpu_left = _make_athlete(Athlete.Team.CPU, Athlete.Side.LEFT)
 	cpu_right = _make_athlete(Athlete.Team.CPU, Athlete.Side.RIGHT)
 	ball = RallyBall.new()
-	ball.map = map
-	ball.z_index = 30
 	world.add_child(ball)
 	reticle = AimReticle.new()
-	reticle.map = map
-	reticle.z_index = 8
 	world.add_child(reticle)
 
 
 func _make_athlete(team: int, side: int) -> Athlete:
 	var athlete := Athlete.new()
-	athlete.setup(team, side, map)
+	athlete.setup(team, side)
 	world.add_child(athlete)
+	athlete.sync_world()
 	return athlete
 
 
 func _process(delta: float) -> void:
-	var view := get_viewport_rect().size
-	if view != map.view_size:
-		map.configure(view)
-		court_view.redraw()
 	_poll_input(delta)
 	if paused:
-		_sync_visuals()
+		_sync_visuals(delta, true)
 		_update_ui()
 		return
 	phase_time += delta
@@ -112,7 +107,7 @@ func _process(delta: float) -> void:
 					_begin_point()
 		Phase.MATCH_END:
 			pass
-	_sync_visuals()
+	_sync_visuals(delta, false)
 	_update_ui()
 
 
@@ -189,10 +184,13 @@ func _clear_swing() -> void:
 func _aim_with_mouse() -> void:
 	if phase == Phase.MATCH_END or (phase == Phase.SERVE_AIM and human_serving):
 		return
-	var court := map.to_court(get_viewport().get_mouse_position())
-	court.x = clampf(court.x, -2.0, 22.0)
-	court.y = clampf(court.y, -2.0, MatchRules.NET_Y - 0.35)
-	reticle.court_pos = court
+	var hit: Variant = camera_rig.mouse_to_court(get_viewport().get_mouse_position())
+	if hit == null:
+		return
+	var court_pos: Vector2 = hit
+	court_pos.x = clampf(court_pos.x, -2.0, 22.0)
+	court_pos.y = clampf(court_pos.y, -2.0, MatchRules.NET_Y - 0.35)
+	reticle.court_pos = court_pos
 
 
 func _can_volley_now() -> bool:
@@ -209,7 +207,7 @@ func _apply_ui_font() -> void:
 	_ui_font = load("res://fonts/Inter-Regular.ttf")
 	if _ui_font == null:
 		return
-	for label in [score_label, status_label, shots_label, help_label, reason_label, pause_label]:
+	for label in [score_label, status_label, shots_label, help_label, reason_label, kitchen_label, pause_label]:
 		label.add_theme_font_override("font", _ui_font)
 
 
@@ -234,10 +232,9 @@ func _begin_point() -> void:
 	_snap_to_setup()
 	_clear_swing()
 	reticle.court_pos = Vector2(10.0, 8.0)
-	court_view.serve_box = _serve_box()
-	court_view.show_serve_box = true
-	court_view.redraw()
+	court.set_serve_box(_serve_box(), true)
 	_place_held_ball()
+	_sync_visuals(0.0, true)
 
 
 func _server_score() -> int:
@@ -266,6 +263,7 @@ func _snap_to_setup() -> void:
 	for athlete in _everyone():
 		athlete.is_hitter = false
 		athlete.court_pos = athlete.home_back()
+		athlete.speed = 0.0
 	var server := _server()
 	var receiver := _receiver()
 	server.court_pos = server.serve_stance()
@@ -295,8 +293,7 @@ func _serve_now() -> void:
 		shot = ShotCatalog.Id.SOFT
 	armed = shot
 	var target := MatchRules.serve_land_point(human_serving, _server_score())
-	court_view.show_serve_box = false
-	court_view.redraw()
+	court.set_serve_box(_serve_box(), false)
 	_execute_hit(server, shot, target, false)
 	_clear_swing()
 
@@ -459,8 +456,7 @@ func _end_point(human_won: bool, reason: String) -> void:
 	else:
 		cpu_score += 1
 	human_serving = human_won
-	court_view.show_serve_box = false
-	court_view.redraw()
+	court.set_serve_box(_serve_box(), false)
 	_clear_swing()
 	if auto_rally:
 		print("point: %s  score %d-%d  hits %d" % [reason, human_score, cpu_score, hits_completed])
@@ -481,14 +477,46 @@ func _everyone() -> Array[Athlete]:
 	return all
 
 
-func _sync_visuals() -> void:
+func _human_closer_to_net() -> Athlete:
+	if human_left.court_pos.y <= human_right.court_pos.y:
+		return human_left
+	return human_right
+
+
+func _focus_athlete() -> Athlete:
+	if phase == Phase.SERVE_AIM:
+		if human_serving:
+			return _server()
+		var receiver := _receiver()
+		return receiver if receiver.is_human() else _human_closer_to_net()
+	if not last_hitter_human:
+		return _pick_hitter(true, _contact_point(true))
+	return _human_closer_to_net()
+
+
+func _sync_visuals(delta: float, snap_camera: bool) -> void:
 	var show_aim := phase != Phase.MATCH_END and not (phase == Phase.SERVE_AIM and human_serving)
 	reticle.valid = MatchRules.is_in_court(reticle.court_pos) and MatchRules.is_north_of_net(reticle.court_pos)
 	reticle.shown = show_aim
-	reticle.sync_screen()
-	ball.sync_screen()
+	reticle.sync_world()
+	ball.sync_world()
 	for athlete in _everyone():
-		athlete.sync_screen()
+		athlete.sync_world()
+	var focus := _focus_athlete()
+	var on_kitchen := KitchenOccupancy.in_front_view(focus.court_pos, true)
+	var is_set := KitchenOccupancy.is_set_athlete(focus)
+	var ball_world := CourtMap.to_world(ball.ground_pos, ball.height)
+	camera_rig.apply(delta, focus.court_pos, ball_world, on_kitchen, is_set, focus.speed, snap_camera)
+	court.set_kitchen_emphasis(not on_kitchen)
+	minimap.sync_state(
+		_everyone(),
+		ball.ground_pos,
+		ball.height,
+		ball.stage != RallyBall.Stage.IDLE,
+		reticle.court_pos,
+		show_aim,
+		reticle.valid
+	)
 
 
 func _update_ui() -> void:
@@ -520,6 +548,27 @@ func _update_ui() -> void:
 	lines.append(_shot_row(ShotCatalog.Id.SOFT, "Click", "Soft"))
 	lines.append(_shot_row(ShotCatalog.Id.HARD, "Double", "Hard"))
 	shots_label.text = "\n".join(lines)
+	var view_name := "kitchen line" if camera_rig.last_on_kitchen else "pulled back"
+	if camera_rig.last_on_kitchen and camera_rig.last_set:
+		view_name = "kitchen SET"
+	var ball_h := _ball_height_label()
+	kitchen_label.text = "\n".join([
+		KitchenOccupancy.rally_phase(human_left, human_right, cpu_left, cpu_right),
+		"You  %s" % KitchenOccupancy.describe_team(human_left, human_right),
+		"CPU  %s" % KitchenOccupancy.describe_team(cpu_left, cpu_right),
+		"View  %s" % view_name,
+		ball_h,
+	])
+
+
+func _ball_height_label() -> String:
+	if ball == null or ball.stage == RallyBall.Stage.IDLE or ball.stage == RallyBall.Stage.DEAD:
+		return "Ball  —"
+	if ball.height >= ShotCatalog.SMASH_MIN_HEIGHT:
+		return "Ball  high — attack"
+	if ball.height < MatchRules.NET_HEIGHT:
+		return "Ball  low — reset"
+	return "Ball  chest"
 
 
 func _shot_row(id: int, key: String, name: String) -> String:
@@ -556,6 +605,40 @@ func _setup_action(name: String, events: Array) -> void:
 
 func _set_paused_visible(show: bool) -> void:
 	pause_layer.visible = show
+
+
+func _run_camera_preview() -> void:
+	paused = true
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_save_preview("baseline")
+	phase = Phase.IN_FLIGHT
+	hits_completed = 3
+	last_hitter_human = true
+	for athlete in _everyone():
+		athlete.court_pos = athlete.home_nvz()
+		athlete.speed = 0.0
+		athlete.is_hitter = athlete.is_human() and athlete.side == Athlete.Side.RIGHT
+	ball.hold(Vector2(10.0, 24.5), 4.2)
+	_sync_visuals(0.0, true)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	_save_preview("kitchen")
+	get_tree().quit()
+
+
+func _save_preview(label: String) -> void:
+	var focus := _focus_athlete()
+	print(
+		"camera_preview %s on_kitchen=%s set=%s pos=%s fov=%.1f"
+		% [label, camera_rig.last_on_kitchen, camera_rig.last_set, camera_rig.camera.global_position, camera_rig.camera.fov]
+	)
+	print("  focus=%s ball_h=%.2f" % [focus.court_pos, ball.height])
+	var img := get_viewport().get_texture().get_image()
+	if img:
+		var path := "/tmp/gd-pickleball-%s.png" % label
+		var err := img.save_png(path)
+		print("  screenshot %s err=%s" % [path, err])
 
 
 func _exit_tree() -> void:
