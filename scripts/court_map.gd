@@ -27,3 +27,8 @@ static func mouse_on_ground(camera: Camera3D, mouse: Vector2) -> Variant:
 	if camera == null:
 		return null
 	return ray_ground(camera.project_ray_origin(mouse), camera.project_ray_normal(mouse))
+
+
+## Landing for a human return. South of the net is clamped so the shot still crosses.
+static func clamp_aim(court: Vector2) -> Vector2:
+	return Vector2(clampf(court.x, -2.0, 22.0), clampf(court.y, -2.0, MatchRules.NET_Y - 0.35))

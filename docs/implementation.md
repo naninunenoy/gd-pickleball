@@ -9,8 +9,8 @@ All in-game strings must stay English. The project embeds `fonts/Inter-Regular.t
 - Overhead 2D is gone. One 3D TPS (the kitchen view); only the camera pose changes
 - Away from the line the same camera pulls back and up so the kitchen is ahead. On the line it moves in and reads ball height against the net
 - Arriving and stopping settles the camera. Running keeps a small shake
-- Both partners are controlled as a team. The mouse aims a free landing on the opponent court. It does not move a player
-- Click is soft, double-click is hard. Those two paces are the only swings. Human contact is not automatic
+- Both partners are controlled as a team. Mouse or a finger aims a free landing on the opponent court. It does not move a player
+- Click is soft, double-click is hard. On a phone, Soft / Hard buttons are the swing. Those two paces are the only swings. Human contact is not automatic
 - Serves are not aimed. They always land at `MatchRules.serve_land_point`. No service fault
 - Closest player is the hitter. Partner covers the open half
 - If a volley is legal and the ball is on the defender's side outside the NVZ, run to the airborne ball and hit it in the air. Do not wait for a bounce
@@ -32,7 +32,8 @@ scripts/athlete.gd         one player; court_pos is feet
 scripts/ball.gd            landing-based flight, no physics engine
 scripts/court_3d.gd        3D court, net, kitchen-line emphasis
 scripts/reticle.gd         aim reticle on the ground
-scripts/minimap.gd         partner / kitchen overlay
+scripts/minimap.gd         partner / kitchen overlay; drag to aim
+scripts/play_hud.gd        Soft / Hard / Pause buttons
 scripts/main.gd            match flow, input, AI, scoring
 scripts/check_slice.gd     headless sanity checks
 scenes/main.tscn           entry
@@ -54,7 +55,7 @@ Units are feet. The 3D world is 1:1 with court feet. `CourtMap.to_world` maps co
 
 The player team is always south. Side change is not implemented. Do not swap ends.
 
-Mouse aim is a camera ray onto the ground plane `Y = 0`, then clamped to the north side of the net.
+Mouse aim is a camera ray onto the ground plane `Y = 0`, then clamped to the north side of the net. A finger drag uses the same ray. Dragging the mini-map writes court coordinates directly.
 
 CPU "right" is screen left (`x < 10`). Even/odd server side uses that team's own score.
 
@@ -69,10 +70,10 @@ CPU odd:    CPU left = screen right serves, target = south-left box
 
 `main.gd` `Phase`:
 
-1. `SERVE_AIM` — reticle hidden on your serve. Human click/double-click; CPU waits, then serves to `serve_land_point`
-2. `IN_FLIGHT` — flight or first bounce. Human must click while in range. CPU auto-returns. Legal volleys are taken in the air
+1. `SERVE_AIM` — reticle hidden on your serve. Human click/double-click or Soft / Hard; CPU waits, then serves to `serve_land_point`
+2. `IN_FLIGHT` — flight or first bounce. Human must swing while in range. CPU auto-returns. Legal volleys are taken in the air
 3. `POINT_END` — show the reason for about 1.4s
-4. `MATCH_END` — 11 points. A click rematches
+4. `MATCH_END` — 11 points. A click or tap rematches
 
 `hits_completed` is the number of legal outbound hits.
 
@@ -87,19 +88,27 @@ Actions are registered in `main.gd` `_ensure_actions()`. Do not depend on the `p
 
 | action | role |
 |---|---|
-| mouse left | First click arms Soft and waits 0.2s for a possible double-click. `event.double_click` upgrades to Hard immediately. Also starts a serve |
+| mouse left | First click arms Soft and waits 0.2s for a possible double-click. `event.double_click` upgrades to Hard immediately. Also starts a serve. Ignored for 0.5s after a touch so a phone's synthetic click does not swing |
+| finger drag | Same ground ray as the mouse. Does not swing. Hidden during your serve |
+| mini-map drag | Maps widget coordinates onto the court, then `CourtMap.clamp_aim` |
+| Soft / Hard HUD | Immediate pace. Also starts a serve. Used on phones; also works with a mouse |
+| Pause HUD | Toggles pause. Space / Start still work |
 | `shot_soft` | Z / A. Immediate soft. Also starts a serve |
 | `shot_hard` | X / B. Immediate hard. Also starts a serve |
 | `confirm` | Enter rematch only |
 | `pause` | Space / Start. Toggles pause. Does not hit |
 
+`pointing/emulate_mouse_from_touch` is off so a tap on the court is not a left click. HUD buttons still receive `InputEventScreenTouch`.
+
 Mouse court position is a camera ray onto the ground, clamped to the north side of the net, and written to `reticle.court_pos`. Human returns use that point. Out of court is allowed so a miss can go out.
+
+On a tall/narrow window the camera uses `KEEP_WIDTH` so the court stays in frame. Compact layouts use the window size (not the stretched viewport) and scale HUD pixels so Soft / Hard stay thumb-sized. Portrait puts those buttons at the bottom. Landscape phones keep them on the right.
 
 Human hits only while a swing is armed and the hitter is in range. `--auto-rally` presses Hard for the human so headless rallies still run.
 
 `toggle_hitter` and leftover `aim_*` actions are reserved and ignored. Do not add early/late quality windows yet.
 
-Serve uses click/double-click only for pace. Landing is always `serve_land_point`. In-air click after the double bounce is a volley (hard + high = smash). Kitchen volleys still fault.
+Serve uses click/double-click or Soft / Hard only for pace. Landing is always `serve_land_point`. In-air swing after the double bounce is a volley (hard + high = smash). Kitchen volleys still fault.
 
 ## Ball
 
@@ -148,6 +157,8 @@ There is no separate 2D renderer for the main view. Shake scales with the focus 
 
 The focus athlete is the human server/receiver during serve, the human hitter while defending, and the human closer to the net after we hit (so the partner walking up to the line pulls the camera with them).
 
+On a portrait viewport (`height > width`) the camera uses `Camera3D.KEEP_WIDTH` so the court does not become a vertical tunnel.
+
 ## HUD
 
 Required:
@@ -158,8 +169,8 @@ Required:
 - Free-aim reticle on the opponent court (hidden during your serve)
 - Score and constraint (let it bounce / volley OK / NVZ)
 - Kitchen occupancy (you / CPU / rally phase) and which camera is active
-- Soft / Hard labels
-- Minimap for partner spacing
+- Soft / Hard labels or on-screen buttons
+- Minimap for partner spacing (also an aim pad)
 
 ## Add later / do not add now
 

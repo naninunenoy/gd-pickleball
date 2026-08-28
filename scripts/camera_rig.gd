@@ -117,3 +117,12 @@ func _apply(shake: float) -> void:
 	if camera.global_position.distance_to(_look) > 0.2:
 		camera.look_at(_look, Vector3.UP)
 	camera.fov = _fov
+	var vp := camera.get_viewport()
+	if vp == null:
+		return
+	var win := DisplayServer.window_get_size()
+	if win.x > 0 and win.y > 0:
+		camera.keep_aspect = Camera3D.KEEP_WIDTH if win.y > win.x else Camera3D.KEEP_HEIGHT
+	else:
+		var view := vp.get_visible_rect().size
+		camera.keep_aspect = Camera3D.KEEP_WIDTH if view.y > view.x else Camera3D.KEEP_HEIGHT

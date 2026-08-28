@@ -43,6 +43,7 @@ offset_right = 360.0
 offset_bottom = 88.0
 theme_override_colors/font_color = Color(0.93, 0.96, 0.9, 1)
 theme_override_font_sizes/font_size = 28
+mouse_filter = 2
 text = "You  0  -  0  CPU"
 
 [node name="Status" type="Label" parent="UI"]
@@ -52,6 +53,7 @@ offset_right = 360.0
 offset_bottom = 180.0
 theme_override_colors/font_color = Color(0.82, 0.9, 0.78, 1)
 theme_override_font_sizes/font_size = 22
+mouse_filter = 2
 text = "Serve"
 
 [node name="Reason" type="Label" parent="UI"]
@@ -61,6 +63,7 @@ offset_right = 360.0
 offset_bottom = 240.0
 theme_override_colors/font_color = Color(0.95, 0.78, 0.42, 1)
 theme_override_font_sizes/font_size = 22
+mouse_filter = 2
 text = ""
 
 [node name="Kitchen" type="Label" parent="UI"]
@@ -70,6 +73,7 @@ offset_right = 420.0
 offset_bottom = 390.0
 theme_override_colors/font_color = Color(0.93, 0.9, 0.62, 1)
 theme_override_font_sizes/font_size = 20
+mouse_filter = 2
 text = "Taking the kitchen"
 
 [node name="Shots" type="Label" parent="UI"]
@@ -82,6 +86,7 @@ offset_right = -28.0
 offset_bottom = 220.0
 theme_override_colors/font_color = Color(0.9, 0.93, 0.86, 1)
 theme_override_font_sizes/font_size = 22
+mouse_filter = 2
 text = "Shots"
 
 [node name="Help" type="Label" parent="UI"]
@@ -96,6 +101,7 @@ offset_right = -28.0
 offset_bottom = -24.0
 theme_override_colors/font_color = Color(0.7, 0.78, 0.7, 1)
 theme_override_font_sizes/font_size = 18
+mouse_filter = 2
 text = "Controls"
 
 [node name="Minimap" type="Control" parent="UI"]
@@ -106,7 +112,7 @@ offset_left = 24.0
 offset_top = -286.0
 offset_right = 184.0
 offset_bottom = -24.0
-mouse_filter = 2
+mouse_filter = 0
 script = ExtResource("4_minimap")
 
 [node name="Pause" type="CanvasLayer" parent="."]
@@ -139,4 +145,4 @@ theme_override_font_sizes/font_size = 36
 horizontal_alignment = 1
 vertical_alignment = 1
 text = "Paused
-Space to resume"
+Tap to resume"

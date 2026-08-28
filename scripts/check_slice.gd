@@ -71,6 +71,12 @@ func _init() -> void:
 		failed += _expect((hit as Vector2).y < 50.0, "ground ray lands in front of the camera")
 	failed += _expect(CourtMap.ray_ground(Vector3(10.0, 10.0, 50.0), Vector3(0.0, 1.0, 0.0)) == null, "upward ray misses the ground")
 	failed += _expect(CourtMap.to_world(Vector2(10.0, 22.0), 3.0) == Vector3(10.0, 3.0, 22.0), "court maps x to x and y to z")
+	var clamped := CourtMap.clamp_aim(Vector2(40.0, 40.0))
+	failed += _expect(clamped.x <= 22.0 and clamped.y < MatchRules.NET_Y, "aim clamp stays north of the net")
+	var map_top := Minimap.local_to_court(Vector2(8.0 + 72.0, 8.0), Vector2(160.0, 264.0))
+	failed += _expect(absf(map_top.x - 10.0) < 0.05 and absf(map_top.y) < 0.05, "minimap top-center is north baseline")
+	var map_bot := Minimap.local_to_court(Vector2(8.0 + 72.0, 264.0 - 8.0), Vector2(160.0, 264.0))
+	failed += _expect(absf(map_bot.y - MatchRules.COURT_LENGTH) < 0.05, "minimap bottom-center is south baseline")
 	if failed == 0:
 		print("check_slice: ok")
 		quit(0)

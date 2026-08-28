@@ -19,14 +19,18 @@ You control both players on the bottom court at once. You do not walk a characte
 
 | Input | Meaning |
 |---|---|
-| Mouse | Aim where the next return should land on the opponent court |
+| Mouse / drag | Aim where the next return should land on the opponent court |
 | Click | Soft hit (slow, high) |
 | Double-click | Hard hit (fast, low) |
-| Space / Start | Pause |
+| Soft / Hard buttons | Same two paces. Use these on a phone |
+| Drag the mini-map | Aim by placing the landing on the map |
+| Space / Start / Pause | Pause |
 
 Z / gamepad A still hit soft. X / gamepad B still hit hard.
 
-Move the mouse to place the reticle. The ball goes to that point when you hit. A green reticle is in. A red reticle is out or on your side of the net.
+On a phone, drag the 3D view or the mini-map to aim, then tap Soft or Hard. A tap on the court does not swing. Soft / Hard also start a serve.
+
+Move the mouse or finger to place the reticle. The ball goes to that point when you hit. A green reticle is in. A red reticle is out or on your side of the net.
 
 If you never click, the ball bounces twice and you lose the point. CPU still returns on its own.
 
@@ -55,9 +59,9 @@ Hitter toggle and changing ends are not in this slice. Left stays left, right st
 
 - You do not aim the serve
 - There is no service fault
-- Click or double-click. The ball always lands deep in the legal diagonal box
+- Click or Soft / Hard. The ball always lands deep in the legal diagonal box
 - Soft/hard only changes the arc
-- The receiver must let it bounce, then click to return
+- The receiver must let it bounce, then click or tap Soft / Hard to return
 
 ## Double bounce
 
@@ -82,7 +86,7 @@ Only two paces:
 - **Soft (click)**: slow and high. Use this to drop or dink
 - **Hard (double-click)**: fast and low. Use this to drive. A high ball becomes a smash
 
-The mouse picks the landing. Click vs double-click is how hard it gets there.
+The mouse or a finger picks the landing. Click vs double-click, or Soft vs Hard, is how hard it gets there.
 
 ## When a point ends
 
@@ -91,7 +95,7 @@ One of these awards a point:
 - Ball lands out
 - Ball does not clear the net
 - Kitchen volley
-- You do not click in time, second bounce
+- You do not click or tap Soft / Hard in time, second bounce
 
 The opponent only returns. It aims near center and does not read you.
 

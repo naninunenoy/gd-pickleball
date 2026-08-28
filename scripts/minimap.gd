@@ -1,6 +1,10 @@
 class_name Minimap
 extends Control
 
+signal aim_at(court_pos: Vector2)
+
+const PAD := 8.0
+
 var athletes: Array[Athlete] = []
 var ball_pos := Vector2.ZERO
 var ball_height := 0.0
@@ -11,8 +15,16 @@ var reticle_valid := true
 
 
 func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_STOP
 	custom_minimum_size = Vector2(160, 250)
+
+
+static func local_to_court(local: Vector2, widget_size: Vector2) -> Vector2:
+	var inner := widget_size - Vector2(PAD * 2.0, PAD * 2.0)
+	if inner.x <= 0.001 or inner.y <= 0.001:
+		return Vector2(MatchRules.HALF, 8.0)
+	var p := (local - Vector2(PAD, PAD)) / inner
+	return Vector2(p.x * MatchRules.COURT_WIDTH, p.y * MatchRules.COURT_LENGTH)
 
 
 func sync_state(
@@ -79,3 +91,24 @@ func _h(court: Rect2, y_ft: float, color: Color, width: float) -> void:
 	var a := _map(Vector2(0.0, y_ft), court)
 	var b := _map(Vector2(MatchRules.COURT_WIDTH, y_ft), court)
 	draw_line(a, b, color, width)
+
+
+func _gui_input(event: InputEvent) -> void:
+	var local := Vector2.ZERO
+	var aiming := false
+	if event is InputEventScreenTouch and event.pressed:
+		local = event.position
+		aiming = true
+	elif event is InputEventScreenDrag:
+		local = event.position
+		aiming = true
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		local = event.position
+		aiming = true
+	elif event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_LEFT:
+		local = event.position
+		aiming = true
+	if not aiming:
+		return
+	aim_at.emit(CourtMap.clamp_aim(local_to_court(local, size)))
+	accept_event()
