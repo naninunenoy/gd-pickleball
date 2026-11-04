@@ -1,173 +1,75 @@
 class_name Court3D
 extends Node3D
 
-var serve_box := Rect2()
-var show_serve_box := false
-var kitchen_emphasis := true
-
-var _serve_mesh: MeshInstance3D
-var _line_south: MeshInstance3D
-var _line_north: MeshInstance3D
+var _target: MeshInstance3D
+var _flash := 0.0
 
 
 func _ready() -> void:
-	_build()
-
-
-func set_serve_box(box: Rect2, shown: bool) -> void:
-	serve_box = box
-	show_serve_box = shown
-	if _serve_mesh == null:
-		return
-	_serve_mesh.visible = shown
-	if shown:
-		_serve_mesh.position = Vector3(
-			box.position.x + box.size.x * 0.5,
-			0.04,
-			box.position.y + box.size.y * 0.5
-		)
-		var mesh := _serve_mesh.mesh as BoxMesh
-		if mesh:
-			mesh.size = Vector3(box.size.x, 0.03, box.size.y)
-
-
-func set_kitchen_emphasis(active: bool) -> void:
-	kitchen_emphasis = active
-	var color := Color(0.98, 0.86, 0.28) if active else Color(0.93, 0.94, 0.88)
-	_tint(_line_south, color, active)
-	_tint(_line_north, color, active)
-
-
-func _build() -> void:
-	var apron := _box(
-		Vector3(36.0, 0.06, 60.0),
-		Vector3(MatchRules.HALF, -0.08, MatchRules.NET_Y),
-		Color(0.11, 0.20, 0.14)
-	)
-	apron.name = "Apron"
-	var floor := _box(
-		Vector3(MatchRules.COURT_WIDTH, 0.08, MatchRules.COURT_LENGTH),
-		Vector3(MatchRules.HALF, -0.03, MatchRules.NET_Y),
-		Color(0.20, 0.46, 0.33)
-	)
-	floor.name = "Floor"
-	var nvz := _box(
-		Vector3(MatchRules.COURT_WIDTH, 0.025, MatchRules.NVZ_DEPTH * 2.0),
-		Vector3(MatchRules.HALF, 0.02, MatchRules.NET_Y),
-		Color(0.16, 0.36, 0.28)
-	)
-	nvz.name = "NVZ"
-	var line := Color(0.93, 0.94, 0.88)
-	_hline(0.0, line, 0.16)
-	_hline(MatchRules.COURT_LENGTH, line, 0.16)
-	_vline(0.0, 0.0, MatchRules.COURT_LENGTH, line, 0.16)
-	_vline(MatchRules.COURT_WIDTH, 0.0, MatchRules.COURT_LENGTH, line, 0.16)
-	_vline(MatchRules.HALF, 0.0, MatchRules.NVZ_NORTH, line, 0.12)
-	_vline(MatchRules.HALF, MatchRules.NVZ_SOUTH, MatchRules.COURT_LENGTH, line, 0.12)
-	_line_north = _hline(MatchRules.NVZ_NORTH, Color(0.98, 0.86, 0.28), 0.28)
-	_line_south = _hline(MatchRules.NVZ_SOUTH, Color(0.98, 0.86, 0.28), 0.28)
-	_line_north.name = "KitchenNorth"
-	_line_south.name = "KitchenSouth"
-	_build_net()
-	_serve_mesh = _box(
-		Vector3(MatchRules.HALF, 0.03, MatchRules.SERVICE_DEPTH),
-		Vector3(5.0, 0.04, 7.5),
-		Color(0.95, 0.88, 0.35, 0.22)
-	)
-	_serve_mesh.name = "ServeBox"
-	_serve_mesh.visible = false
-	var serve_mesh := _serve_mesh.mesh as BoxMesh
-	if serve_mesh and serve_mesh.material is StandardMaterial3D:
-		(serve_mesh.material as StandardMaterial3D).transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_box(Vector3(80.0, 0.1, 90.0), Vector3(6.0, -0.15, 10.0), Color("173e36"))
+	_box(Vector3(16.0, 0.1, 28.0), Vector3(6.0, -0.04, 11.5), Color("bcad8d"))
+	_box(Vector3(12.0, 0.08, 23.0), Vector3(6.0, 0.02, 11.5), Color("39836c"))
+	_box(Vector3(12.0, 0.03, 8.0), Vector3(6.0, 0.07, 4.0), Color("31745f"))
+	var line := Color("dcdfbb")
+	for x in [0.0, 12.0]:
+		_box(Vector3(0.1, 0.04, 23.0), Vector3(x, 0.1, 11.5), line)
+	for z in [0.0, 8.0, 23.0]:
+		_box(Vector3(12.1, 0.04, 0.1), Vector3(6.0, 0.1, z), line)
+	_box(Vector3(0.08, 0.04, 8.0), Vector3(6.0, 0.1, 4.0), line)
+	# A solid practice wall replaces the net and opponents.
+	_box(Vector3(14.0, 8.0, 0.5), Vector3(6.0, 4.0, -0.15), Color("a4bea5"))
+	_box(Vector3(14.3, 0.2, 0.7), Vector3(6.0, 8.05, -0.15), Color("e5e5c8"))
+	_box(Vector3(13.8, 0.12, 0.08), Vector3(6.0, 2.6, 0.13), Color("e5e5c8"))
+	for x in [-1.0, 13.0]:
+		_box(Vector3(0.3, 8.0, 0.8), Vector3(x, 4.0, -0.15), Color("618f78"))
+	var target_mesh := TorusMesh.new()
+	target_mesh.inner_radius = 0.9
+	target_mesh.outer_radius = 1.0
+	_target = MeshInstance3D.new()
+	_target.mesh = target_mesh
+	_target.position = Vector3(6.0, 4.2, 0.16)
+	_target.rotation_degrees.x = 90.0
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color("557e65")
+	_target.material_override = mat
+	add_child(_target)
+	var label := Label3D.new()
+	label.text = "W A L L   /   0 1"
+	label.font = load("res://fonts/Inter-Regular.ttf")
+	label.font_size = 64
+	label.pixel_size = 0.01
+	label.position = Vector3(6.0, 6.9, 0.2)
+	label.modulate = Color("355e4d")
+	label.outline_size = 0
+	add_child(label)
 	var sun := DirectionalLight3D.new()
-	sun.name = "Sun"
-	sun.rotation_degrees = Vector3(-52.0, 28.0, 0.0)
-	sun.light_energy = 1.15
-	sun.light_color = Color(1.0, 0.97, 0.9)
+	sun.rotation_degrees = Vector3(-60.0, -25.0, 0.0)
+	sun.light_color = Color.WHITE
+	sun.light_energy = 0.7
 	sun.shadow_enabled = true
 	add_child(sun)
-	var fill := DirectionalLight3D.new()
-	fill.name = "Fill"
-	fill.rotation_degrees = Vector3(-28.0, -150.0, 0.0)
-	fill.light_energy = 0.28
-	fill.light_color = Color(0.75, 0.82, 0.9)
-	fill.shadow_enabled = false
-	add_child(fill)
 
 
-func _build_net() -> void:
-	var net := _box(
-		Vector3(MatchRules.COURT_WIDTH, MatchRules.NET_HEIGHT, 0.07),
-		Vector3(MatchRules.HALF, MatchRules.NET_HEIGHT * 0.5, MatchRules.NET_Y),
-		Color(0.07, 0.08, 0.09, 0.62)
-	)
-	net.name = "Net"
-	var tape := _box(
-		Vector3(MatchRules.COURT_WIDTH + 0.2, 0.08, 0.1),
-		Vector3(MatchRules.HALF, MatchRules.NET_HEIGHT, MatchRules.NET_Y),
-		Color(0.92, 0.93, 0.9)
-	)
-	tape.name = "NetTape"
-	_post(0.0)
-	_post(MatchRules.COURT_WIDTH)
+func flash_wall() -> void:
+	_flash = 0.24
 
 
-func _post(x: float) -> void:
-	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.12
-	mesh.bottom_radius = 0.12
-	mesh.height = MatchRules.NET_HEIGHT + 0.2
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.position = Vector3(x, mesh.height * 0.5, MatchRules.NET_Y)
-	mi.material_override = _mat(Color(0.75, 0.75, 0.72), true)
-	add_child(mi)
+func animate(delta: float) -> void:
+	_flash = maxf(0.0, _flash - delta)
+	if _target != null:
+		_target.scale = Vector3.ONE * (1.0 + _flash * 0.8)
 
 
-func _hline(z: float, color: Color, width: float) -> MeshInstance3D:
-	return _box(
-		Vector3(MatchRules.COURT_WIDTH + 0.08, 0.05, width),
-		Vector3(MatchRules.HALF, 0.035, z),
-		color
-	)
-
-
-func _vline(x: float, z0: float, z1: float, color: Color, width: float) -> MeshInstance3D:
-	return _box(
-		Vector3(width, 0.05, absf(z1 - z0)),
-		Vector3(x, 0.035, (z0 + z1) * 0.5),
-		color
-	)
-
-
-func _box(size: Vector3, pos: Vector3, color: Color) -> MeshInstance3D:
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	mesh.material = _mat(color, color.a < 0.99)
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.position = pos
-	add_child(mi)
-	return mi
-
-
-func _mat(color: Color, unshaded: bool = false) -> StandardMaterial3D:
+func _box(size: Vector3, pos: Vector3, color: Color) -> void:
+	var shape := BoxMesh.new()
+	shape.size = size
+	var mesh := MeshInstance3D.new()
+	mesh.mesh = shape
+	mesh.position = pos
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = color
-	if unshaded or color.a < 0.99:
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	if color.a < 0.99:
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	return mat
-
-
-func _tint(mi: MeshInstance3D, color: Color, emit: bool) -> void:
-	if mi == null:
-		return
-	var mat := _mat(color, true)
-	if emit:
-		mat.emission_enabled = true
-		mat.emission = color
-		mat.emission_energy_multiplier = 0.55
-	mi.material_override = mat
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.roughness = 0.9
+	mesh.material_override = mat
+	add_child(mesh)

@@ -1,41 +1,31 @@
 # gd-pickleball
 
-Third-person pickleball doubles. One 3D kitchen view: the camera pulls back until you reach the line, then moves in. This version repeats serve-to-rally points. First to 11.
+**Wall rally** — solo pickleball practice, made for your phone in portrait.
 
-- Player rules: [`docs/rules.md`](docs/rules.md)
-- Implementation notes: [`docs/implementation.md`](docs/implementation.md)
-- Design discussion (phases, kitchen, camera hypotheses): [`docs/design-discussion.md`](docs/design-discussion.md)
+One player. One wall. Tap to serve, let the ball bounce once, then tap when the pad says **TAP NOW**. Footwork is automatic; you control the rhythm. Keep the rally going and beat your saved personal best.
 
-Mouse or a finger aims on the opponent court. Click is a soft hit, double-click is a hard hit. On a phone, drag to aim and tap Soft / Hard. If a volley is legal, take it in the air. Serves always land in the legal box; there is no service fault.
+Tap the court or the large bottom pad. No aiming, dragging or double-tap needed. A second bounce ends the rally; tap to try again. Pause freezes play and leaving the app/tab pauses an active rally. On desktop, click or Space / Enter to hit, P / Escape to pause, R to reset.
 
-In-game text is English only. `fonts/Inter-Regular.ttf` is the UI font so labels stay readable in the web build.
+- [Player rules](docs/rules.md)
+- [Implementation and validation](docs/implementation.md)
+
+All in-game text is English, using the embedded Inter font.
 
 ## Run
 
-Godot **4.7.2**, main scene `scenes/main.tscn`. Headless checks:
+Godot **4.7.2**, main scene `scenes/main.tscn`.
 
 ```bash
 ./scripts/install_godot.sh
+export PATH="$HOME/.local/bin:$PATH"
+godot --headless --path . --import
 godot --headless --path . -s res://scripts/check_slice.gd
-godot --headless --path . --quit-after 720 -- --auto-rally
+godot --headless --path . --fixed-fps 60 --quit-after 7200 -- --auto-rally
 ```
 
+Open `project.godot` in the Godot editor to play natively. The reference viewport is 432x864; wider screens keep the same tall play area.
+
 ## Web
-
-Godot 4.7 / GDScript exports to WASM for GitHub Pages. The game scripts are not recompiled for the browser. A prebuilt engine WASM ships with a `.pck`.
-
-GitHub Pages uses a **no-threads** web export. That is the Godot 4.3+ default, so COOP/COEP headers for `SharedArrayBuffer` are not required.
-
-Limits:
-
-- Web is Compatibility renderer / WebGL 2.0 only
-- Godot 4 C# does not export to web. This repo is GDScript only
-- No-threads builds are slower than threaded ones
-- Phones: drag to aim, tap Soft / Hard to hit. Landscape or portrait. Add the page to the home screen if you want it fullscreen
-
-Public URL after Pages is enabled:
-
-https://naninunenoy.github.io/gd-pickleball/
 
 ```bash
 ./scripts/install_godot.sh
@@ -43,4 +33,6 @@ https://naninunenoy.github.io/gd-pickleball/
 python3 -m http.server 8080 --directory build/web
 ```
 
-Opening the HTML via `file://` will not work. Push to `main` runs `.github/workflows/web.yml`. Set Pages source to **GitHub Actions** once in the repo settings.
+Open over HTTP, not `file://`. The Web export uses WebGL 2.0 / Compatibility and single-threaded WASM, without SharedArrayBuffer or COOP/COEP requirements. No-threads builds are slower than threaded builds. Mobile browsers preserve the portrait layout even when orientation cannot be locked. Best records use local storage and can be cleared with browser site data.
+
+Pushes to `main` run `.github/workflows/web.yml`; GitHub Pages source must be **GitHub Actions**. Public URL after deployment: https://naninunenoy.github.io/gd-pickleball/

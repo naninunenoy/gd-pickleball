@@ -1,154 +1,88 @@
 class_name Athlete
 extends Node3D
 
-enum Team { HUMAN, CPU }
-enum Side { LEFT, RIGHT }
-
-const MOVE_SPEED := 16.0
-const REACH := 3.8
-const RADIUS_FT := 0.9
-const BODY_HEIGHT := 5.5
-
-var team := Team.HUMAN
-var side := Side.LEFT
-var court_pos := Vector2.ZERO
-var is_hitter := false
-var speed := 0.0
-
-var _body: MeshInstance3D
-var _paddle: MeshInstance3D
-var _ring: MeshInstance3D
-var _shadow: MeshInstance3D
+## The only player. Footwork is automatic; the tap animates the paddle.
+var _body: Node3D
+var _paddle: Node3D
+var _swing_time := 0.0
+var _clock := 0.0
+var _previous_x := WallRally.WIDTH * 0.5
 
 
-func setup(p_team: int, p_side: int) -> void:
-	team = p_team
-	side = p_side
-	court_pos = home_back()
-	speed = 0.0
-	_build_meshes()
-
-
-func is_human() -> bool:
-	return team == Team.HUMAN
-
-
-func home_x() -> float:
-	return 5.0 if side == Side.LEFT else 15.0
-
-
-func home_back() -> Vector2:
-	if team == Team.HUMAN:
-		return Vector2(home_x(), 40.6)
-	return Vector2(home_x(), 3.4)
-
-
-func home_nvz() -> Vector2:
-	if team == Team.HUMAN:
-		return Vector2(home_x(), 30.2)
-	return Vector2(home_x(), 13.8)
-
-
-func serve_stance() -> Vector2:
-	if team == Team.HUMAN:
-		return Vector2(home_x(), 45.1)
-	return Vector2(home_x(), -1.1)
-
-
-func receive_stance() -> Vector2:
-	if team == Team.HUMAN:
-		return Vector2(home_x(), 38.4)
-	return Vector2(home_x(), 5.6)
-
-
-func in_nvz() -> bool:
-	return MatchRules.is_in_nvz(court_pos)
-
-
-func in_front() -> bool:
-	if team == Team.HUMAN:
-		return court_pos.y <= 32.0
-	return court_pos.y >= 12.0
-
-
-func move_towards(target: Vector2, delta: float) -> void:
-	var prev := court_pos
-	var offset := target - court_pos
-	var dist := offset.length()
-	if dist <= 0.04:
-		court_pos = target
-		speed = 0.0
-		return
-	court_pos += offset / dist * minf(MOVE_SPEED * delta, dist)
-	if delta > 0.0:
-		speed = court_pos.distance_to(prev) / delta
-	else:
-		speed = 0.0
-
-
-func can_reach(point: Vector2) -> bool:
-	return court_pos.distance_to(point) <= REACH
-
-
-func sync_world() -> void:
-	if _body == null:
-		_build_meshes()
-	position = CourtMap.to_world(court_pos, 0.0)
-	var net_dir := -1.0 if is_human() else 1.0
-	var set_at_line := KitchenOccupancy.is_set_athlete(self)
-	_paddle.position = Vector3(0.62, 3.25 if set_at_line else 2.7, net_dir * 1.05)
-	_ring.visible = is_hitter or set_at_line
-	var ring_mat := _ring.material_override as StandardMaterial3D
-	if ring_mat:
-		if set_at_line:
-			ring_mat.albedo_color = Color(0.98, 0.86, 0.28)
-		elif is_hitter:
-			ring_mat.albedo_color = Color(1.0, 1.0, 1.0)
-		else:
-			ring_mat.albedo_color = Color(0.7, 0.7, 0.7, 0.4)
-
-
-func _build_meshes() -> void:
-	if _body != null:
-		return
-	var cap := CapsuleMesh.new()
-	cap.radius = 0.72
-	cap.height = BODY_HEIGHT
-	_body = MeshInstance3D.new()
-	_body.mesh = cap
-	_body.position = Vector3(0.0, BODY_HEIGHT * 0.5, 0.0)
-	var body_mat := StandardMaterial3D.new()
-	body_mat.albedo_color = Color(0.32, 0.78, 0.86) if is_human() else Color(0.93, 0.47, 0.33)
-	_body.material_override = body_mat
+func _ready() -> void:
+	_body = Node3D.new()
 	add_child(_body)
-	var paddle_mesh := BoxMesh.new()
-	paddle_mesh.size = Vector3(0.18, 1.15, 0.48)
-	_paddle = MeshInstance3D.new()
-	_paddle.mesh = paddle_mesh
-	var paddle_mat := StandardMaterial3D.new()
-	paddle_mat.albedo_color = Color(0.95, 0.93, 0.82)
-	_paddle.material_override = paddle_mat
+	_piece(CapsuleMesh.new(), Vector3(0.0, 2.1, 0.0), Color("e9f0d7"), Vector3(0.82, 1.1, 0.65))
+	var head := SphereMesh.new()
+	head.radius = 0.43
+	head.height = 0.86
+	_piece(head, Vector3(0.0, 3.48, 0.0), Color("edb38c"))
+	var hair := SphereMesh.new()
+	hair.radius = 0.44
+	hair.height = 0.45
+	_piece(hair, Vector3(0.0, 3.76, 0.03), Color("233c37"))
+	for x in [-0.28, 0.28]:
+		var leg := CapsuleMesh.new()
+		leg.radius = 0.18
+		leg.height = 1.2
+		_piece(leg, Vector3(x, 0.74, 0.0), Color("203d36"))
+		var shoe := BoxMesh.new()
+		shoe.size = Vector3(0.42, 0.24, 0.75)
+		_piece(shoe, Vector3(x, 0.14, -0.12), Color("fff7dd"))
+	_paddle = Node3D.new()
+	_paddle.position = Vector3(0.8, 2.0, -0.25)
 	add_child(_paddle)
-	var torus := TorusMesh.new()
-	torus.inner_radius = 0.82
-	torus.outer_radius = 1.08
-	_ring = MeshInstance3D.new()
-	_ring.mesh = torus
-	_ring.position = Vector3(0.0, 0.06, 0.0)
-	var ring_mat := StandardMaterial3D.new()
-	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	ring_mat.albedo_color = Color(1, 1, 1)
-	_ring.material_override = ring_mat
-	add_child(_ring)
-	var shadow_mesh := SphereMesh.new()
-	shadow_mesh.radius = 0.85
-	shadow_mesh.height = 0.08
-	_shadow = MeshInstance3D.new()
-	_shadow.mesh = shadow_mesh
-	_shadow.position = Vector3(0.0, 0.03, 0.0)
-	var shadow_mat := StandardMaterial3D.new()
-	shadow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	shadow_mat.albedo_color = Color(0.05, 0.07, 0.05, 0.35)
-	shadow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_shadow.material_override = shadow_mat
-	add_child(_shadow)
+	var face := CylinderMesh.new()
+	face.top_radius = 0.4
+	face.bottom_radius = 0.4
+	face.height = 0.14
+	var paddle := MeshInstance3D.new()
+	paddle.mesh = face
+	paddle.rotation_degrees.x = 90.0
+	paddle.material_override = _material(Color("ff9c70"))
+	_paddle.add_child(paddle)
+	var handle := BoxMesh.new()
+	handle.size = Vector3(0.15, 0.65, 0.15)
+	var grip := MeshInstance3D.new()
+	grip.mesh = handle
+	grip.position.y = -0.5
+	grip.material_override = _material(Color("243e38"))
+	_paddle.add_child(grip)
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.9
+	ring.outer_radius = 1.0
+	_piece(ring, Vector3(0.0, 0.04, 0.0), Color("d5ef9d"))
+
+
+func swing() -> void:
+	_swing_time = 0.28
+
+
+func sync_practice(x: float, delta: float) -> void:
+	if _body == null:
+		return
+	_clock += delta
+	var moving := absf(x - _previous_x) > 0.002
+	position = Vector3(x, 0.0, WallRally.PLAYER_Z)
+	_body.position.y = absf(sin(_clock * 14.0)) * 0.08 if moving else 0.0
+	_body.rotation.z = clampf((_previous_x - x) * 1.5, -0.12, 0.12)
+	_previous_x = x
+	_swing_time = maxf(0.0, _swing_time - delta)
+	_paddle.rotation.y = -sin(_swing_time / 0.28 * PI) * 1.8
+	_paddle.position.z = -0.25 - sin(_swing_time / 0.28 * PI) * 1.0
+
+
+func _piece(mesh: Mesh, pos: Vector3, color: Color, mesh_scale: Vector3 = Vector3.ONE) -> void:
+	var part := MeshInstance3D.new()
+	part.mesh = mesh
+	part.position = pos
+	part.scale = mesh_scale
+	part.material_override = _material(color)
+	_body.add_child(part)
+
+
+func _material(color: Color) -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = 0.9
+	return mat

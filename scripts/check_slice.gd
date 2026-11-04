@@ -1,92 +1,174 @@
 extends SceneTree
 
+var failures := 0
+var checks := 0
+
+
 func _init() -> void:
-	var failed := 0
-	failed += _expect(MatchRules.is_in_court(Vector2(0, 0)), "left-top corner is in")
-	failed += _expect(MatchRules.is_in_court(Vector2(20, 44)), "right-bottom corner is in")
-	failed += _expect(not MatchRules.is_in_court(Vector2(-0.1, 10)), "outside left is out")
-	failed += _expect(MatchRules.is_in_nvz(Vector2(10, 22)), "net is inside NVZ")
-	failed += _expect(not MatchRules.is_in_nvz(Vector2(10, 14.9)), "above NVZ is not kitchen")
-	failed += _expect(MatchRules.volley_legal(3), "3rd incoming shot can be volleyed")
-	failed += _expect(not MatchRules.volley_legal(2), "return cannot be volleyed")
-	failed += _expect(MatchRules.serve_from_screen_right(true, 0), "human even serves from right")
-	failed += _expect(not MatchRules.serve_from_screen_right(true, 1), "human odd serves from left")
-	failed += _expect(not MatchRules.serve_from_screen_right(false, 0), "cpu even serves from screen left")
-	failed += _expect(MatchRules.serve_from_screen_right(false, 1), "cpu odd serves from screen right")
-	var human_even := MatchRules.serve_target_box(true, 0)
-	failed += _expect(MatchRules.inclusive_in_rect(Vector2(5, 7), human_even), "human even targets north left")
-	failed += _expect(not MatchRules.inclusive_in_rect(Vector2(15, 7), human_even), "human even does not target north right")
-	var cpu_even := MatchRules.serve_target_box(false, 0)
-	failed += _expect(MatchRules.inclusive_in_rect(Vector2(15, 36), cpu_even), "cpu even targets south right")
-	var serve_land := MatchRules.serve_land_point(true, 0)
-	failed += _expect(MatchRules.inclusive_in_rect(serve_land, MatchRules.north_left_box()), "prescribed serve is in north left")
-	var serve_net := MatchRules.height_at_net(Vector2(15.0, 45.0), serve_land, 2.8, 0.0, 3.1)
-	failed += _expect(serve_net > MatchRules.NET_HEIGHT, "prescribed serve clears the net")
-	failed += _expect(MatchRules.crosses_net(Vector2(10, 40), Vector2(10, 8)), "south to north crosses net")
-	failed += _expect(not MatchRules.crosses_net(Vector2(10, 40), Vector2(12, 32)), "same side does not cross")
-	var net_h := MatchRules.height_at_net(Vector2(10, 40), Vector2(10, 8), 2.8, 0.0, 3.1)
-	failed += _expect(net_h > MatchRules.NET_HEIGHT, "standard hard ball clears the net")
-	var kitchen := MatchRules.zone_rect(0, 2)
-	failed += _expect(MatchRules.inclusive_in_rect(Vector2(5, 18), kitchen), "kitchen left zone")
-	failed += _expect(not MatchRules.inclusive_in_rect(Vector2(15, 18), kitchen), "kitchen left is not right")
-	var deep_right := MatchRules.zone_center(1, 0)
-	failed += _expect(deep_right.x > 10.0 and deep_right.y < 7.5, "deep right center")
-	failed += _expect(ShotCatalog.flight_time(ShotCatalog.Id.SOFT) > ShotCatalog.flight_time(ShotCatalog.Id.HARD), "soft is slower than hard")
-	var volley_net := MatchRules.height_at_net(Vector2(10.0, 40.6), Vector2(10.0, 8.0), 2.8, 0.0, ShotCatalog.apex_extra(ShotCatalog.Id.HARD, true, 2.8))
-	failed += _expect(volley_net > MatchRules.NET_HEIGHT, "hard volley from baseline clears the net")
-	var ball := RallyBall.new()
-	ball.launch(Vector2(15.0, 45.0), 2.8, Vector2(5.0, 7.5), ShotCatalog.Id.HARD)
-	var frames := 0
-	var landed := false
-	while frames < 180 and ball.stage != RallyBall.Stage.DEAD:
-		ball.advance(1.0 / 60.0)
-		frames += 1
-		if ball.just_net:
-			break
-		if ball.just_first_bounce:
-			landed = true
-			break
-	failed += _expect(landed, "hard serve reaches a first bounce")
-	failed += _expect(MatchRules.inclusive_in_rect(ball.ground_pos, MatchRules.north_left_box()), "drive serve can land in north left box")
-	ball.free()
-	failed += _expect(KitchenOccupancy.is_on_line(Vector2(5.0, 30.2), true), "human home_nvz is on the kitchen line")
-	failed += _expect(not KitchenOccupancy.is_on_line(Vector2(5.0, 40.6), true), "human baseline is not on the kitchen line")
-	failed += _expect(KitchenOccupancy.in_front_view(Vector2(5.0, 30.2), true), "human at the line uses kitchen camera")
-	failed += _expect(not KitchenOccupancy.in_front_view(Vector2(5.0, 40.6), true), "human baseline uses back camera")
-	failed += _expect(KitchenOccupancy.is_on_line(Vector2(5.0, 13.8), false), "cpu home_nvz is on the kitchen line")
-	failed += _expect(KitchenOccupancy.is_set_on_line(Vector2(5.0, 30.2), true, 0.2), "stopped on the line is set")
-	failed += _expect(not KitchenOccupancy.is_set_on_line(Vector2(5.0, 30.2), true, 8.0), "running on the line is not set")
-	failed += _expect(KitchenOccupancy.in_front_view(Vector2(5.0, 26.0), true), "inside NVZ keeps kitchen camera")
-	var back := CameraRig.compose(Vector2(15.0, 40.6), Vector3(10.0, 3.0, 8.0), 0.0)
-	var kit := CameraRig.compose(Vector2(15.0, 30.2), Vector3(10.0, 2.5, 20.0), 1.0)
-	failed += _expect(kit.pos.y + 1.5 < back.pos.y, "kitchen camera sits lower")
-	failed += _expect((kit.pos.z - 30.2) + 3.0 < (back.pos.z - 40.6), "kitchen camera pulls in behind the player")
-	failed += _expect(kit.fov < back.fov, "kitchen camera FOV is tighter")
-	failed += _expect(absf(back.look.z - MatchRules.NVZ_SOUTH) < 12.0, "pulled-back camera looks toward the kitchen")
-	failed += _expect(back.look.y > 2.2 and kit.look.y > 2.2, "both cameras look at 3D play height")
-	failed += _expect(CameraRig.follow_speed(1.0, true) > CameraRig.follow_speed(0.0, false), "set camera locks faster")
-	var hit: Variant = CourtMap.ray_ground(Vector3(10.0, 10.0, 50.0), Vector3(0.0, -1.0, -2.0).normalized())
-	failed += _expect(hit is Vector2, "ground ray hits the court plane")
-	if hit is Vector2:
-		failed += _expect((hit as Vector2).y < 50.0, "ground ray lands in front of the camera")
-	failed += _expect(CourtMap.ray_ground(Vector3(10.0, 10.0, 50.0), Vector3(0.0, 1.0, 0.0)) == null, "upward ray misses the ground")
-	failed += _expect(CourtMap.to_world(Vector2(10.0, 22.0), 3.0) == Vector3(10.0, 3.0, 22.0), "court maps x to x and y to z")
-	var clamped := CourtMap.clamp_aim(Vector2(40.0, 40.0))
-	failed += _expect(clamped.x <= 22.0 and clamped.y < MatchRules.NET_Y, "aim clamp stays north of the net")
-	var map_top := Minimap.local_to_court(Vector2(8.0 + 72.0, 8.0), Vector2(160.0, 264.0))
-	failed += _expect(absf(map_top.x - 10.0) < 0.05 and absf(map_top.y) < 0.05, "minimap top-center is north baseline")
-	var map_bot := Minimap.local_to_court(Vector2(8.0 + 72.0, 264.0 - 8.0), Vector2(160.0, 264.0))
-	failed += _expect(absf(map_bot.y - MatchRules.COURT_LENGTH) < 0.05, "minimap bottom-center is south baseline")
-	if failed == 0:
-		print("check_slice: ok")
-		quit(0)
-	else:
-		print("check_slice: %d failed" % failed)
-		quit(1)
+	_run.call_deferred()
 
 
-func _expect(cond: bool, label: String) -> int:
-	if cond:
-		return 0
-	print("FAIL: ", label)
-	return 1
+func _expect(condition: bool, message: String) -> void:
+	checks += 1
+	if not condition:
+		failures += 1
+		print("FAIL: ", message)
+
+
+func _until_return(rally: WallRally) -> void:
+	for frame in range(600):
+		if rally.can_return() or rally.phase == WallRally.Phase.MISSED:
+			return
+		rally.advance(1.0 / 120.0)
+
+
+func _run() -> void:
+	var rally := WallRally.new()
+	rally.reset()
+	_expect(rally.phase == WallRally.Phase.READY, "starts ready")
+	rally.tap()
+	_expect(rally.phase == WallRally.Phase.OUTBOUND and rally.returns == 0, "tap serves without scoring")
+	rally.advance(0.72)
+	_expect(rally.wall_hits == 1 and rally.phase == WallRally.Phase.RETURNING, "solid wall rebounds the ball")
+	_expect(is_equal_approx(rally.ball_pos.z, 0.2), "rebound begins at wall")
+	rally.advance(0.92)
+	_expect(rally.bounces == 1 and rally.phase == WallRally.Phase.BOUNCED, "wall return bounces on ground once")
+	_expect(not rally.can_return(), "immediate bounce is outside contact window")
+	_until_return(rally)
+	_expect(rally.can_return(), "bounce rises into the tap window")
+	_expect(absf(rally.player_x - rally.target_x) < 0.1, "single player automatically reaches rebound lane")
+	rally.tap()
+	_expect(rally.returns == 1 and rally.best == 1 and rally.phase == WallRally.Phase.OUTBOUND, "one legal tap makes exactly one return")
+	_expect(is_zero_approx(rally.swing_buffer), "return consumes buffered tap")
+	rally.advance(10.0)
+	_expect(rally.phase == WallRally.Phase.MISSED and rally.bounces == 2, "without another tap second bounce ends rally")
+	_expect(rally.returns == 1, "returns never happen automatically")
+	rally.tap()
+	_expect(rally.returns == 0 and rally.best == 1, "retry clears rally but keeps best")
+	rally.tap()
+	rally.advance(10.0)
+	_expect(rally.phase == WallRally.Phase.MISSED and rally.returns == 0, "outbound early tap expires instead of auto-returning")
+	rally.tap()
+	rally.advance(0.72 + 0.92 + 0.10)
+	rally.tap()
+	rally.advance(0.12)
+	_expect(rally.returns == 1, "short buffer accepts a slightly early tap")
+	rally.advance(10.0)
+	rally.tap()
+	rally.advance(0.72 + 0.92 + 1.12 * 0.85)
+	_expect(not rally.can_return(), "late swing falls outside contact window")
+	rally.tap()
+	rally.advance(0.3)
+	_expect(rally.phase == WallRally.Phase.MISSED and rally.returns == 0, "late tap cannot save a second bounce")
+
+	var coarse := WallRally.new()
+	var fine := WallRally.new()
+	coarse.tap()
+	fine.tap()
+	coarse.advance(2.1)
+	for frame in range(210):
+		fine.advance(0.01)
+	_expect(coarse.phase == fine.phase and coarse.ball_pos.distance_to(fine.ball_pos) < 0.001, "slow frames preserve wall/bounce segment time")
+
+	rally.reset()
+	rally.tap()
+	for hit in range(50):
+		_until_return(rally)
+		_expect(rally.can_return(), "reachable contact window at return %d" % hit)
+		_expect(rally.ball_pos.x >= 2.0 and rally.ball_pos.x <= WallRally.WIDTH - 2.0, "rebound stays within lane")
+		rally.tap()
+	_expect(rally.returns == 50 and rally.best == 50 and rally.wall_hits == 50, "sustained rally counts 50 returns")
+	_expect(is_equal_approx(rally.pace(), 0.72), "difficulty has a bounded speed floor")
+
+	# Exercise the real scene and input dispatch, including GUI consumption.
+	var scene = load("res://scenes/main.tscn").instantiate()
+	root.add_child(scene)
+	await process_frame
+	scene._saved_best = 1000000 # Do not alter a developer's saved record in checks.
+	_expect(scene.get_node("World").get_child_count() == 3, "world contains court, exactly one player and one ball")
+	_expect(scene.rally.phase == WallRally.Phase.READY, "scene waits for tap")
+	var small_screen_scale := minf(320.0 / 432.0, 568.0 / 864.0)
+	_expect(scene.hud.tap_button.size.y * small_screen_scale >= 44.0, "main pad remains a 44px touch target on small phones")
+	_expect(scene.hud.pause_button.size.y * small_screen_scale >= 44.0, "pause remains a 44px touch target on small phones")
+	_touch(Vector2(210, 480), true)
+	await process_frame
+	_touch(Vector2(210, 480), false)
+	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND, "touch on court serves")
+	# Synthetic mouse input following that touch must not arm another swing.
+	_mouse(Vector2(210, 480))
+	await process_frame
+	_expect(is_zero_approx(scene.rally.swing_buffer), "synthetic mouse after touch is ignored")
+	scene.rally.reset()
+	_touch(Vector2(200, 775), true)
+	await process_frame
+	_touch(Vector2(200, 775), false)
+	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND, "large bottom pad serves through GUI touch")
+	_until_return(scene.rally)
+	_touch(Vector2(200, 775), true)
+	await process_frame
+	_touch(Vector2(200, 775), false)
+	_expect(scene.rally.returns == 1, "bottom pad returns a playable ball")
+	_touch(Vector2(368, 70), true)
+	await process_frame
+	_touch(Vector2(368, 70), false)
+	_expect(scene.paused, "pause button consumes touch without swinging")
+	var frozen: Vector3 = scene.rally.ball_pos
+	await process_frame
+	_expect(scene.rally.ball_pos == frozen, "pause freezes ball and timer")
+	_touch(Vector2(210, 480), true)
+	await process_frame
+	_touch(Vector2(210, 480), false)
+	_expect(not scene.paused and is_zero_approx(scene.rally.swing_buffer), "court tap resumes without a new swing")
+	scene.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	_expect(scene.paused, "leaving app pauses active rally")
+	scene.paused = false
+	scene.rally.reset()
+	_touch(Vector2(200, 775), true)
+	await process_frame
+	var second := InputEventScreenTouch.new()
+	second.index = 1
+	second.position = root.get_screen_transform() * Vector2(210, 480)
+	second.pressed = true
+	Input.parse_input_event(second)
+	await process_frame
+	_expect(is_zero_approx(scene.rally.swing_buffer), "second finger cannot add a duplicate swing")
+	second.pressed = false
+	Input.parse_input_event(second)
+	_touch(Vector2(200, 775), false)
+	_touch(Vector2(200, 775), true)
+	await process_frame
+	scene.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	# Simulate a lost touch release while switching apps.
+	_touch(Vector2(200, 775), true)
+	await process_frame
+	_touch(Vector2(200, 775), false)
+	_expect(not scene.paused, "touch ownership resets when switching apps")
+	scene.rally.reset()
+	var key := InputEventKey.new()
+	key.physical_keycode = KEY_SPACE
+	key.pressed = true
+	Input.parse_input_event(key)
+	await process_frame
+	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND, "Space fallback serves on desktop")
+	scene.free()
+	print("check_slice: %d checks, %d failed" % [checks, failures])
+	quit(0 if failures == 0 else 1)
+
+
+func _touch(pos: Vector2, pressed: bool) -> void:
+	var touch := InputEventScreenTouch.new()
+	touch.index = 0
+	touch.position = root.get_screen_transform() * pos
+	touch.pressed = pressed
+	Input.parse_input_event(touch)
+
+
+func _mouse(pos: Vector2) -> void:
+	var click := InputEventMouseButton.new()
+	click.position = root.get_screen_transform() * pos
+	click.button_index = MOUSE_BUTTON_LEFT
+	click.pressed = true
+	Input.parse_input_event(click)
+	var release := click.duplicate() as InputEventMouseButton
+	release.pressed = false
+	Input.parse_input_event(release)
