@@ -3,24 +3,34 @@ extends RefCounted
 
 ## Deterministic, display-independent wall practice. Positions are in court feet.
 enum Phase { READY, OUTBOUND, RETURNING, BOUNCED, MISSED }
+enum Hand { RIGHT, LEFT }
 
 const WIDTH := 12.0
 const LENGTH := 23.0
 const PLAYER_Z := 18.8
 const CONTACT_HEIGHT := 2.2
+const PADDLE_SIDE := 1.15
+const PADDLE_FORWARD := 1.1
+const CONTACT_RADIUS := 0.42
+const MOVE_SPEED := 16.0
+const BOUNCE_Z := 13.6
 const TAP_BUFFER := 0.18
 const WINDOW_OPEN := 0.16
 const WINDOW_CLOSE := 0.76
 
 var phase: Phase = Phase.READY
+var dominant_hand: Hand = Hand.RIGHT
 var returns := 0
 var best := 0
 var starting_best := 0
 var wall_hits := 0
 var bounces := 0
 var phase_time := 0.0
-var ball_pos := Vector3(WIDTH * 0.5, CONTACT_HEIGHT, PLAYER_Z - 1.0)
-var player_x := WIDTH * 0.5
+var ball_pos := Vector3(WIDTH * 0.5 + PADDLE_SIDE, CONTACT_HEIGHT, PLAYER_Z - PADDLE_FORWARD)
+var player_pos := Vector3(WIDTH * 0.5, 0.0, PLAYER_Z)
+var paddle_height := CONTACT_HEIGHT
+var last_contact_pos := ball_pos
+var contact_age := 1.0
 var target_x := WIDTH * 0.5
 var swing_buffer := 0.0
 var last_feedback := ""
@@ -37,11 +47,36 @@ func reset() -> void:
 	wall_hits = 0
 	bounces = 0
 	phase_time = 0.0
-	player_x = WIDTH * 0.5
-	target_x = player_x
+	player_pos = Vector3(WIDTH * 0.5, 0.0, PLAYER_Z)
+	paddle_height = CONTACT_HEIGHT
+	target_x = paddle_position().x
 	swing_buffer = 0.0
 	last_feedback = ""
-	ball_pos = Vector3(player_x + 0.7, CONTACT_HEIGHT, PLAYER_Z - 1.0)
+	ball_pos = paddle_position()
+	last_contact_pos = ball_pos
+	contact_age = 1.0
+
+
+func hand_side() -> float:
+	return 1.0 if dominant_hand == Hand.RIGHT else -1.0
+
+
+func paddle_position() -> Vector3:
+	return player_pos + Vector3(hand_side() * PADDLE_SIDE, paddle_height, -PADDLE_FORWARD)
+
+
+func _move_to_contact(step: float) -> void:
+	var target := Vector3(target_x - hand_side() * PADDLE_SIDE, 0.0, PLAYER_Z)
+	var height := CONTACT_HEIGHT
+	if phase == Phase.RETURNING or phase == Phase.BOUNCED:
+		# Wait beside the incoming lane, then follow its playable bounce arc.
+		var contact_z := lerpf(BOUNCE_Z, LENGTH, WINDOW_OPEN)
+		if phase == Phase.BOUNCED:
+			contact_z = clampf(ball_pos.z, contact_z, lerpf(BOUNCE_Z, LENGTH, WINDOW_CLOSE))
+			height = clampf(ball_pos.y, 1.0, 3.0)
+		target.z = contact_z + PADDLE_FORWARD
+	player_pos = player_pos.move_toward(target, MOVE_SPEED * step)
+	paddle_height = move_toward(paddle_height, height, 12.0 * step)
 
 
 func pace() -> float:
@@ -54,7 +89,7 @@ func bounce_progress() -> float:
 
 func can_return() -> bool:
 	var progress := bounce_progress()
-	return phase == Phase.BOUNCED and progress >= WINDOW_OPEN and progress <= WINDOW_CLOSE
+	return phase == Phase.BOUNCED and progress >= WINDOW_OPEN and progress <= WINDOW_CLOSE and paddle_position().distance_to(ball_pos) <= CONTACT_RADIUS
 
 
 func tap() -> void:
@@ -78,10 +113,11 @@ func advance(delta: float) -> void:
 		remaining -= step
 		phase_time += step
 		swing_buffer = maxf(0.0, swing_buffer - step)
-		player_x = move_toward(player_x, target_x, step * 10.0)
+		contact_age += step
 		var progress := clampf(phase_time / _duration, 0.0, 1.0)
 		ball_pos = _from.lerp(_to, progress)
 		ball_pos.y += 4.0 * _apex * progress * (1.0 - progress)
+		_move_to_contact(step)
 		if swing_buffer > 0.0 and can_return():
 			_return_ball()
 		elif phase_time >= _duration - 0.000001:
@@ -101,7 +137,9 @@ func _launch() -> void:
 	swing_buffer = 0.0
 	bounces = 0
 	last_feedback = "To the wall"
-	var wall_x := clampf(player_x + sin(float(returns + 1) * 1.7) * 1.8, 2.4, WIDTH - 2.4)
+	last_contact_pos = ball_pos
+	contact_age = 0.0
+	var wall_x := clampf(ball_pos.x + sin(float(returns + 1) * 1.7) * 1.8, 2.4, WIDTH - 2.4)
 	_segment(Phase.OUTBOUND, Vector3(wall_x, 3.4, 0.2), 0.72 * pace(), 0.55)
 
 
@@ -118,7 +156,7 @@ func _finish_segment() -> void:
 		Phase.OUTBOUND:
 			wall_hits += 1
 			target_x = clampf(WIDTH * 0.5 + sin(float(wall_hits) * 1.37) * 3.1, 2.0, WIDTH - 2.0)
-			_segment(Phase.RETURNING, Vector3(target_x, 0.0, 13.6), 0.92 * pace(), 0.8)
+			_segment(Phase.RETURNING, Vector3(target_x, 0.0, BOUNCE_Z), 0.92 * pace(), 0.8)
 			last_feedback = "Let it bounce"
 		Phase.RETURNING:
 			bounces = 1

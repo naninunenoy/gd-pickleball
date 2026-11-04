@@ -13,7 +13,15 @@
 - `play_hud.gd`: rally/best counters, timing cue, one large tap pad, pause/resume.
 - `check_slice.gd`: deterministic rules and full-scene input/lifecycle regression checks.
 
-Coordinates are feet, X across a 12-foot practice lane, Y up, Z away from the wall at Z=0. Player feet stay at Z=18.8 and automatically track the rebound X. The wall varies its rebound within the lane. An outbound arc hits the wall at height 3.4, then returns to a ground bounce at Z=13.6. The next bounce would be at Z=23. A legal tap between 16% and 76% of that bounce arc sends the ball back. A 0.18s buffer accepts a slightly early tap; it expires normally and is consumed by a return. Each return counts once; serving counts zero. Flight times gradually shrink to a 72% floor. Integration uses small steps and preserves segment overshoot so slow frames do not skip entire input windows.
+Coordinates are feet, X across a 12-foot practice lane, Y up, Z away from the wall at Z=0. The wall varies its rebound within the lane. An outbound arc hits the wall at height 3.4, then returns to a ground bounce at Z=13.6. The next bounce would be at Z=23. A legal tap between 16% and 76% of that bounce arc sends the ball back only when the racket can reach it. A 0.18s buffer accepts a slightly early tap; it expires normally and is consumed by a return. Each return counts once; serving counts zero. Flight times gradually shrink to a 72% floor. Integration uses small steps and preserves segment overshoot so slow frames do not skip entire input windows.
+
+## Dominant hand and contact
+
+`main.gd` exports an internal `dominant_hand` setting, defaulting to `WallRally.Hand.RIGHT`. Set it to `WallRally.Hand.LEFT` in a scene or before adding the main node to the tree to mirror the player. No handedness selector is exposed in the game HUD. The chosen hand survives retries.
+
+The racket center is 1.15 feet to the dominant side and 1.1 feet ahead of the player's feet. Automatic footwork targets `ball X - hand side * 1.15`, not the ball's X itself. The player approaches the opening of the contact window, then tracks its depth during the bounce; the racket follows the ball's height. `WallRally.paddle_position()` is the shared contact geometry. `can_return()` checks both timing and the racket's 0.42-foot contact radius, so lining up the body alone cannot count as a hit.
+
+The held serve ball starts on the racket. A return preserves the current ball position and launches its outgoing arc from that exact point. `last_contact_pos` and `contact_age` drive a 0.28s follow-through that begins with the rendered racket face at the real contact, then blends back to the ready pose. The striking arm, hand, free arm and swing rotation all mirror with handedness. Visual synchronization uses the same `player_pos` and racket coordinates as the simulation.
 
 ## Input and lifecycle
 
@@ -36,3 +44,11 @@ python3 -m http.server 8080 --directory build/web
 ```
 
 For Web testing, use a touch-enabled portrait viewport (including 320px and 390px widths). Verify serve on the court and pad, timed returns, second-bounce/retry, pause/resume without a swing, multitouch/synthetic mouse suppression, portrait framing after rotation, and a clean browser console. Native --headless uses the dummy renderer; browser tests cover actual WebGL rendering. No deployment is required for local validation.
+
+## Web deployment and cache updates
+
+`export_web.sh` cleans its output directory, exports and verifies the raw Godot build, then runs `fingerprint_web.py`. A SHA-256 digest of the output, update code and CI revision identifies the release. `index.html` remains the entry point; every `index.*` asset is renamed to `game-<build>.*`, including the engine, pack, WASM, icons and audio worklets. Both the HTML references and Godot's executable/file-size configuration are updated together. `version.json` records the build and, in CI, `GITHUB_SHA`.
+
+The inline updater from `web_update.js` fetches a uniquely queried `version.json` with `cache: no-store` before the engine starts. A stale page navigates to `?build=<latest>` so an old entry HTML cache is bypassed too. It repeats the check on visible-tab and back/forward-cache restoration, with a 3s timeout and no reload loop for a temporarily mixed CDN release. It never clears IndexedDB, local storage or unrelated caches. GitHub Pages response headers cannot be configured here, and a build cannot remotely delete a browser's HTTP cache: changing asset URLs is the cache invalidation mechanism.
+
+Run `python3 -m unittest discover -s scripts -p 'test_web_export.py'` for the export checks. CI runs them after generating the actual Web build. Browser validation should simulate long-lived cached HTML/assets, publish a second release, and verify the new version/PCK/WASM are requested while the saved personal best survives.

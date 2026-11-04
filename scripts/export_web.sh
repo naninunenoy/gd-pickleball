@@ -54,3 +54,7 @@ if "const GODOT_THREADS_ENABLED = false;" not in html:
     raise SystemExit("Web export is not single-threaded; GitHub Pages would need COOP/COEP headers")
 print("WASM module and single-threaded export verified")
 PY
+
+# Immutable file URLs prevent old HTTP caches mixing deployments. GitHub Pages
+# does not allow this repository to set response Cache-Control headers.
+python3 "$ROOT/scripts/fingerprint_web.py" "$OUT_DIR" "${GITHUB_SHA:-}"

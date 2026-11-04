@@ -5,6 +5,10 @@
 /android/
 export_credentials.cfg
 
+# Python Web export helpers.
+__pycache__/
+*.pyc
+
 # Generated Web/WASM export. Keep .gdignore so Godot never imports the output.
 /build/*
 !/build/.gdignore

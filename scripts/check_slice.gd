@@ -36,7 +36,11 @@ func _run() -> void:
 	_expect(not rally.can_return(), "immediate bounce is outside contact window")
 	_until_return(rally)
 	_expect(rally.can_return(), "bounce rises into the tap window")
-	_expect(absf(rally.player_x - rally.target_x) < 0.1, "single player automatically reaches rebound lane")
+	_expect(rally.paddle_position().distance_to(rally.ball_pos) < 0.01, "automatic footwork puts the racket on the rebound")
+	var correct_position := rally.player_pos
+	rally.player_pos.x = rally.ball_pos.x
+	_expect(not rally.can_return(), "body contact cannot substitute for racket contact")
+	rally.player_pos = correct_position
 	rally.tap()
 	_expect(rally.returns == 1 and rally.best == 1 and rally.phase == WallRally.Phase.OUTBOUND, "one legal tap makes exactly one return")
 	_expect(is_zero_approx(rally.swing_buffer), "return consumes buffered tap")
@@ -79,6 +83,7 @@ func _run() -> void:
 		rally.tap()
 	_expect(rally.returns == 50 and rally.best == 50 and rally.wall_hits == 50, "sustained rally counts 50 returns")
 	_expect(is_equal_approx(rally.pace(), 0.72), "difficulty has a bounded speed floor")
+	_check_handed_contact()
 
 	# Exercise the real scene and input dispatch, including GUI consumption.
 	var scene = load("res://scenes/main.tscn").instantiate()
@@ -151,8 +156,53 @@ func _run() -> void:
 	await process_frame
 	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND, "Space fallback serves on desktop")
 	scene.free()
+	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+		var handed_scene = load("res://scenes/main.tscn").instantiate()
+		handed_scene.dominant_hand = hand
+		root.add_child(handed_scene)
+		await process_frame
+		handed_scene._saved_best = 1000000
+		_expect(handed_scene.rally.dominant_hand == hand, "scene passes internal handedness to simulation")
+		_expect(handed_scene.player.paddle_contact_position().distance_to(handed_scene.rally.ball_pos) < 0.001, "held ball sits on the rendered racket")
+		handed_scene._tap()
+		_until_return(handed_scene.rally)
+		handed_scene._sync_visuals(0.0)
+		_expect(handed_scene.player.paddle_contact_position().distance_to(handed_scene.ball._sphere.global_position) < 0.01, "rendered racket meets incoming ball for either hand")
+		var contact: Vector3 = handed_scene.rally.ball_pos
+		handed_scene._tap()
+		handed_scene._sync_visuals(0.0)
+		_expect(handed_scene.player.paddle_contact_position().distance_to(contact) < 0.001, "swing begins at the real rendered contact point")
+		handed_scene.free()
 	print("check_slice: %d checks, %d failed" % [checks, failures])
 	quit(0 if failures == 0 else 1)
+
+
+func _check_handed_contact() -> void:
+	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+		var rally := WallRally.new()
+		rally.dominant_hand = hand
+		rally.reset()
+		_expect(rally.ball_pos == rally.paddle_position(), "serve starts on the dominant-hand racket")
+		var side := rally.hand_side()
+		_expect(side * (rally.ball_pos.x - rally.player_pos.x) > 1.0, "racket is beside the body on the dominant side")
+		rally.tap()
+		# Early, middle and late taps exercise both lateral and depth tracking.
+		for hit in range(50):
+			var progress: float = [0.17, 0.45, 0.75][hit % 3]
+			for frame in range(600):
+				if rally.phase == WallRally.Phase.BOUNCED and rally.bounce_progress() >= progress:
+					break
+				rally.advance(1.0 / 120.0)
+			_expect(rally.can_return(), "either hand reaches early/middle/late contact throughout a rally")
+			_expect(rally.paddle_position().distance_to(rally.ball_pos) < 0.01, "racket tracks ball height and depth without body contact")
+			_expect(is_equal_approx(side * (rally.ball_pos.x - rally.player_pos.x), WallRally.PADDLE_SIDE), "rebound stays on the striking-hand side")
+			_expect(rally.player_pos.x > 0.0 and rally.player_pos.x < WallRally.WIDTH, "forehand footwork stays inside the court")
+			var contact := rally.ball_pos
+			rally.tap()
+			_expect(rally.ball_pos == contact and rally.last_contact_pos == contact, "return preserves ball position instead of teleporting it to racket")
+		_expect(rally.returns == 50, "both handedness settings sustain 50 physical racket contacts")
+		rally.reset()
+		_expect(rally.dominant_hand == hand, "retry preserves handedness")
 
 
 func _touch(pos: Vector2, pressed: bool) -> void:

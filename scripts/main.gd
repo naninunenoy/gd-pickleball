@@ -2,6 +2,8 @@ extends Node3D
 
 const SAVE_PATH := "user://wall_practice.cfg"
 
+@export var dominant_hand: WallRally.Hand = WallRally.Hand.RIGHT
+
 var rally := WallRally.new()
 var paused := false
 var auto_rally := false
@@ -24,6 +26,7 @@ func _ready() -> void:
 	if config.load(SAVE_PATH) == OK:
 		rally.best = maxi(0, int(config.get_value("practice", "best", 0)))
 	_saved_best = rally.best
+	rally.dominant_hand = dominant_hand
 	rally.reset()
 	hud.tap_pressed.connect(_tap)
 	hud.pause_pressed.connect(_toggle_pause)
@@ -41,7 +44,6 @@ func _process(delta: float) -> void:
 					_tap()
 		rally.advance(delta)
 		if rally.returns > _last_returns:
-			player.swing()
 			if auto_rally:
 				print("wall_return: %d best=%d" % [rally.returns, rally.best])
 		if rally.wall_hits > _last_wall_hits:
@@ -54,7 +56,7 @@ func _process(delta: float) -> void:
 
 
 func _sync_visuals(delta: float) -> void:
-	player.sync_practice(rally.player_x, delta)
+	player.sync_practice(rally, delta)
 	ball.sync_practice(rally, delta)
 	court.animate(delta)
 	hud.sync_state(rally, paused)
@@ -70,7 +72,6 @@ func _tap() -> void:
 		_last_returns = 0
 		_last_wall_hits = 0
 		_miss_time = 0.0
-		player.swing()
 
 
 func _toggle_pause() -> void:
