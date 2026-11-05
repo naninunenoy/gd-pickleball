@@ -85,6 +85,7 @@ func _run() -> void:
 	_expect(is_equal_approx(rally.pace(), 0.72), "difficulty has a bounded speed floor")
 	_check_apex_destination()
 	_check_handed_contact()
+	_check_charged_shots()
 
 	# Exercise the real scene and input dispatch, including GUI consumption.
 	var scene = load("res://scenes/main.tscn").instantiate()
@@ -98,8 +99,10 @@ func _run() -> void:
 	_expect(scene.hud.pause_button.size.y * small_screen_scale >= 44.0, "pause remains a 44px touch target on small phones")
 	_touch(Vector2(210, 480), true)
 	await process_frame
+	_expect(scene.rally.charging and scene.rally.phase == WallRally.Phase.READY, "press starts charging without serving")
 	_touch(Vector2(210, 480), false)
-	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND, "touch on court serves")
+	await process_frame
+	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND, "court touch release serves")
 	# Synthetic mouse input following that touch must not arm another swing.
 	_mouse(Vector2(210, 480))
 	await process_frame
@@ -107,16 +110,21 @@ func _run() -> void:
 	scene.rally.reset()
 	_touch(Vector2(200, 775), true)
 	await process_frame
-	_touch(Vector2(200, 775), false)
-	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND, "large bottom pad serves through GUI touch")
+	_expect(scene.rally.charging, "large pad begins charging through GUI touch")
+	scene._press_started_msec -= 600
+	_touch(Vector2(210, 480), false)
+	await process_frame
+	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and scene.rally.shot_charge >= 0.8, "release outside the pad uses actual elapsed hold time")
 	_until_return(scene.rally)
 	_touch(Vector2(200, 775), true)
 	await process_frame
 	_touch(Vector2(200, 775), false)
+	await process_frame
 	_expect(scene.rally.returns == 1, "bottom pad returns a playable ball")
 	_touch(Vector2(368, 70), true)
 	await process_frame
 	_touch(Vector2(368, 70), false)
+	await process_frame
 	_expect(scene.paused, "pause button consumes touch without swinging")
 	var frozen: Vector3 = scene.rally.ball_pos
 	await process_frame
@@ -124,6 +132,7 @@ func _run() -> void:
 	_touch(Vector2(210, 480), true)
 	await process_frame
 	_touch(Vector2(210, 480), false)
+	await process_frame
 	_expect(not scene.paused and is_zero_approx(scene.rally.swing_buffer), "court tap resumes without a new swing")
 	scene.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
 	_expect(scene.paused, "leaving app pauses active rally")
@@ -137,10 +146,11 @@ func _run() -> void:
 	second.pressed = true
 	Input.parse_input_event(second)
 	await process_frame
-	_expect(is_zero_approx(scene.rally.swing_buffer), "second finger cannot add a duplicate swing")
+	_expect(scene.rally.charging and scene.rally.phase == WallRally.Phase.READY, "second finger cannot release or replace the held shot")
 	second.pressed = false
 	Input.parse_input_event(second)
 	_touch(Vector2(200, 775), false)
+	await process_frame
 	_touch(Vector2(200, 775), true)
 	await process_frame
 	scene.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
@@ -148,6 +158,7 @@ func _run() -> void:
 	_touch(Vector2(200, 775), true)
 	await process_frame
 	_touch(Vector2(200, 775), false)
+	await process_frame
 	_expect(not scene.paused, "touch ownership resets when switching apps")
 	scene.rally.reset()
 	var key := InputEventKey.new()
@@ -155,7 +166,13 @@ func _run() -> void:
 	key.pressed = true
 	Input.parse_input_event(key)
 	await process_frame
-	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND, "Space fallback serves on desktop")
+	_expect(scene.rally.charging and scene.rally.phase == WallRally.Phase.READY, "Space press charges on desktop")
+	var key_up := key.duplicate() as InputEventKey
+	key_up.pressed = false
+	Input.parse_input_event(key_up)
+	await process_frame
+	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND, "Space release serves on desktop")
+	await _check_scene_charge_controls(scene)
 	scene.free()
 	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
 		var handed_scene = load("res://scenes/main.tscn").instantiate()
@@ -174,9 +191,147 @@ func _run() -> void:
 		handed_scene._tap()
 		handed_scene._sync_visuals(0.0)
 		_expect(handed_scene.player.paddle_contact_position().distance_to(contact) < 0.001, "swing begins at the real rendered contact point")
+		_expect(handed_scene.ball._impact.visible and handed_scene.ball._impact.position == contact, "successful return flashes at the actual racket contact for either hand")
+		handed_scene.rally.advance(0.1)
+		handed_scene._sync_visuals(0.0)
+		_expect(handed_scene.ball._impact_ring.scale.x > 1.0, "hit ring expands after contact")
+		handed_scene.rally.advance(RallyBall.IMPACT_DURATION)
+		handed_scene._sync_visuals(0.0)
+		_expect(not handed_scene.ball._impact.visible, "hit effect expires after its brief lifetime")
 		handed_scene.free()
 	print("check_slice: %d checks, %d failed" % [checks, failures])
 	quit(0 if failures == 0 else 1)
+
+
+func _check_charged_shots() -> void:
+	var short := WallRally.new()
+	short.press()
+	short.advance(0.05)
+	_expect(short.charging and short.phase == WallRally.Phase.READY, "holding before serve does not launch a ball")
+	short.release()
+	var long := WallRally.new()
+	long.press()
+	long.advance(2.0)
+	_expect(is_equal_approx(long.charge_fraction(), 1.0), "power caps at full charge without auto-firing")
+	long.release()
+	_expect(long.shot_speed > short.shot_speed and is_equal_approx(long.shot_speed, WallRally.MAX_SHOT_SPEED), "longer hold produces a faster bounded shot")
+	short.advance(0.2)
+	long.advance(0.2)
+	_expect(long.ball_pos.z < short.ball_pos.z - 1.0, "charged ball actually travels farther in equal outbound time")
+	short.advance(0.72 / short.shot_speed - short.phase_time)
+	long.advance(0.72 / long.shot_speed - long.phase_time)
+	short.advance(0.2)
+	long.advance(0.2)
+	_expect(long.ball_pos.z > short.ball_pos.z + 1.0, "wall rebound retains the charged speed")
+	_expect(long.receive_apex == short.receive_apex, "speed change preserves the predicted strike geometry")
+
+	var rally := WallRally.new()
+	rally.tap()
+	rally.advance(0.72)
+	rally.press()
+	rally.advance(0.92 + 0.56)
+	_expect(rally.can_return() and rally.returns == 0, "holding through contact never returns automatically")
+	rally.release()
+	_expect(rally.returns == 1 and is_equal_approx(rally.shot_speed, WallRally.MAX_SHOT_SPEED), "release at contact applies the held power")
+	rally.release()
+	_expect(rally.returns == 1, "a duplicate release cannot add another return")
+
+	rally.reset()
+	rally.tap()
+	rally.advance(0.72 + 0.92 + 1.12 * 0.25)
+	rally.press()
+	rally.advance(0.1)
+	var buffered_power := rally.charge_fraction()
+	rally.release()
+	_expect(rally.returns == 0, "slightly early release buffers a shot")
+	rally.advance(0.18)
+	_expect(rally.returns == 1 and is_equal_approx(rally.shot_charge, buffered_power), "early-release buffer preserves its selected power")
+
+	rally.reset()
+	rally.press()
+	rally.advance(0.2)
+	rally.press()
+	_expect(is_equal_approx(rally.charge_fraction(), 0.2 / WallRally.MAX_CHARGE_TIME), "duplicate press does not reset charging time")
+	rally.cancel_charge()
+	rally.release()
+	_expect(rally.phase == WallRally.Phase.READY and not rally.charging, "canceled charge cannot launch on release")
+	rally.tap()
+	rally.press()
+	rally.advance(10.0)
+	_expect(rally.phase == WallRally.Phase.MISSED and not rally.charging, "second bounce cancels a held shot")
+	rally.release()
+	_expect(rally.phase == WallRally.Phase.MISSED, "releasing a missed hold cannot accidentally restart")
+	rally.press()
+	rally.release()
+	_expect(rally.phase == WallRally.Phase.OUTBOUND, "fresh press and release retries after a miss")
+
+	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+		rally = WallRally.new()
+		rally.dominant_hand = hand
+		rally.tap()
+		for hit in range(30):
+			_until_return(rally)
+			_expect(rally.can_return() and rally.player_pos.distance_to(rally.movement_target()) < 0.001, "either hand reaches the apex for mixed shot speeds")
+			var held: float = [0.0, 0.3, 0.75][hit % 3]
+			rally.press()
+			rally.release(held)
+			_expect(is_equal_approx(rally.shot_speed, lerpf(1.0, WallRally.MAX_SHOT_SPEED, held / WallRally.MAX_CHARGE_TIME)), "each released duration sets the next shot speed")
+		_expect(rally.returns == 30, "mixed charged shots sustain a rally for either hand")
+
+
+func _check_scene_charge_controls(scene) -> void:
+	scene._cancel_press()
+	scene.rally.reset()
+	_touch(Vector2(200, 775), true)
+	await process_frame
+	scene.rally.advance(0.4)
+	scene._sync_visuals(0.0)
+	_expect(scene.rally.charging and scene.hud._progress.value > 0.5, "held power is visible on the HUD meter")
+	_touch(Vector2(210, 480), false, true)
+	await process_frame
+	_expect(not scene.rally.charging and scene.rally.phase == WallRally.Phase.READY, "canceled touch clears a held shot without firing")
+	_touch(Vector2(200, 775), true)
+	await process_frame
+	scene._press_started_msec -= 750
+	_touch(Vector2(210, 480), false)
+	await process_frame
+	_expect(is_equal_approx(scene.rally.shot_speed, WallRally.MAX_SHOT_SPEED), "touch release reads wall-clock hold duration")
+	scene._sync_visuals(0.0)
+	_expect(scene.ball._impact.visible, "successful serve has a visible impact effect")
+	var frozen_age: float = scene.rally.contact_age
+	scene._toggle_pause()
+	await process_frame
+	_expect(scene.rally.contact_age == frozen_age and scene.ball._impact.visible, "pause freezes the hit effect with the simulation")
+	_touch(Vector2(210, 480), true)
+	await process_frame
+	_touch(Vector2(210, 480), false)
+	await process_frame
+	_expect(not scene.paused and not scene.rally.charging, "resume gesture does not begin or release a shot")
+	_touch(Vector2(200, 775), true)
+	await process_frame
+	scene.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	_expect(scene.paused and not scene.rally.charging and scene._press_source == &"", "app switch cancels charge and input ownership")
+	_touch(Vector2(200, 775), false)
+	await process_frame
+	_expect(scene.rally.returns == 0, "release after focus loss cannot hit the ball")
+	scene.paused = false
+	scene._cancel_press()
+	scene.rally.reset()
+	scene._touch_until = 0
+	var down := InputEventMouseButton.new()
+	down.position = root.get_screen_transform() * Vector2(210, 480)
+	down.button_index = MOUSE_BUTTON_LEFT
+	down.pressed = true
+	Input.parse_input_event(down)
+	await process_frame
+	_expect(scene.rally.charging and scene.rally.phase == WallRally.Phase.READY, "desktop mouse down charges without hitting")
+	scene._press_started_msec -= 400
+	var up := down.duplicate() as InputEventMouseButton
+	up.position = root.get_screen_transform() * Vector2(100, 300)
+	up.pressed = false
+	Input.parse_input_event(up)
+	await process_frame
+	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and scene.rally.shot_charge >= 0.5, "desktop mouse up outside the original area releases the charged shot")
 
 
 func _check_apex_destination() -> void:
@@ -246,11 +401,12 @@ func _check_handed_contact() -> void:
 		_expect(rally.dominant_hand == hand, "retry preserves handedness")
 
 
-func _touch(pos: Vector2, pressed: bool) -> void:
+func _touch(pos: Vector2, pressed: bool, canceled: bool = false) -> void:
 	var touch := InputEventScreenTouch.new()
 	touch.index = 0
 	touch.position = root.get_screen_transform() * pos
 	touch.pressed = pressed
+	touch.canceled = canceled
 	Input.parse_input_event(touch)
 
 

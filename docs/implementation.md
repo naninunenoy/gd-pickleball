@@ -13,7 +13,7 @@
 - `play_hud.gd`: rally/best counters, timing cue, one large tap pad, pause/resume.
 - `check_slice.gd`: deterministic rules and full-scene input/lifecycle regression checks.
 
-Coordinates are feet, X across a 12-foot practice lane, Y up, Z away from the wall at Z=0. The wall varies its rebound within the lane. An outbound arc hits the wall at height 3.4, then returns to a ground bounce at Z=13.6. The next bounce would be at Z=23. A legal tap between 16% and 76% of that bounce arc sends the ball back only when the racket can reach it. A 0.18s buffer accepts a slightly early tap; it expires normally and is consumed by a return. Each return counts once; serving counts zero. Flight times gradually shrink to a 72% floor. Integration uses small steps and preserves segment overshoot so slow frames do not skip entire input windows.
+Coordinates are feet, X across a 12-foot practice lane, Y up, Z away from the wall at Z=0. The wall varies its rebound within the lane. An outbound arc hits the wall at height 3.4, then returns to a ground bounce at Z=13.6. The next bounce would be at Z=23. A release between 16% and 76% of that bounce arc sends the ball back only when the racket can reach it. A 0.18s buffer accepts a slightly early release with its selected power; it expires normally and is consumed by a return. Each return counts once; serving counts zero. Rally progression gradually shrinks flight times to a 72% floor, with the held shot speed applied separately. Integration uses small steps and preserves segment overshoot so slow frames do not skip entire input windows.
 
 ## Dominant hand and contact
 
@@ -21,13 +21,17 @@ Coordinates are feet, X across a 12-foot practice lane, Y up, Z away from the wa
 
 The racket center is 1.15 feet to the dominant side and 1.1 feet ahead of the player's feet. On wall rebound, `trajectory_apex()` predicts the highest point of the upcoming first-bounce arc. For this symmetric arc it is `(target_x, 2.65, 18.3)`. The calculation also handles different start/end heights and linear paths. `movement_target()` offsets that point by the dominant hand and forward racket reach, putting the feet at `(apex.x - hand side * 1.15, 0, apex.z + 1.1)`.
 
-The player moves to that fixed destination before the bounce and waits there throughout the bounce, holding the stance after a return until the next wall rebound supplies a new destination. The racket is raised to the predicted peak height; neither the feet nor the racket chase the ball's changing depth. The ground marker shows the predicted strike point. `WallRally.paddle_position()` is the shared contact geometry. `can_return()` still checks timing and the racket's 0.42-foot contact radius, so a tap returns the ball as it passes the prepared racket near the apex. A slightly early tap can use the existing 0.18s buffer. Body contact cannot substitute for racket contact.
+The player moves to that fixed destination before the bounce and waits there throughout the bounce, holding the stance after a return until the next wall rebound supplies a new destination. The racket is raised to the predicted peak height; neither the feet nor the racket chase the ball's changing depth. The ground marker shows the predicted strike point. `WallRally.paddle_position()` is the shared contact geometry. `can_return()` still checks timing and the racket's 0.42-foot contact radius, so releasing returns the ball as it passes the prepared racket near the apex. A slightly early release can use the existing 0.18s buffer. Body contact cannot substitute for racket contact.
 
 The held serve ball starts on the racket. A return preserves the current ball position and launches its outgoing arc from that exact point. `last_contact_pos` and `contact_age` drive a 0.28s follow-through that begins with the rendered racket face at the real contact, then blends back to the ready pose. The striking arm, hand, free arm and swing rotation all mirror with handedness. Visual synchronization uses the same `player_pos` and racket coordinates as the simulation.
 
 ## Input and lifecycle
 
-Screen touch press, court click, the bottom pad, Space and Enter share one tap action. Drags and double-click distinctions do not aim or select shots. Touch release never swings. The first active finger owns touch input until release. Touch-generated mouse events are suppressed for 600ms in both the world and HUD. Pause uses a separate button or P/Escape. A tap while paused resumes without serving or returning. Focus loss pauses active play and clears a buffered swing. Best is saved to `user://wall_practice.cfg` on miss, pause/focus loss and exit; failed writes do not interrupt play.
+Screen touch, the bottom pad, mouse and Space/Enter share press/release input. Press begins charging without hitting; release attempts the strike. `main.gd` records `Time.get_ticks_msec()` so the shot uses actual elapsed hold time even when frame timing varies. `WallRally.advance()` also advances charge time for the live gauge and deterministic model checks. Power clamps at 0.75s, mapping linearly from 1.0x to 1.6x speed. Outbound, wall return and bounce durations are divided by that speed; their geometry and predicted apex stay unchanged. `tap()` remains an instantaneous uncharged helper for diagnostic auto-rallies and model checks.
+
+The first finger/mouse button/key owns the held shot. The HUD emits press-start with its source and index; the main node catches release globally, including when the finger slides off the pad. Secondary fingers, synthetic mouse events for 600ms after touch, repeated key events and duplicate releases cannot create extra shots. A canceled touch, pause, focus loss, reset or second bounce cancels the held input and any release buffer. A release after a canceled/missed hold cannot restart play. A fresh press while paused only resumes; its release does not swing. Best is saved to `user://wall_practice.cfg` on miss, pause/focus loss and exit; failed writes do not interrupt play.
+
+The HUD uses an orange power meter/percentage while charging and a release cue near contact. `RallyBall` pools a contact flash, expanding ring and six sparks, driven by the simulation's `last_contact_pos`, `contact_age` and shot power. They appear for 0.30s after a successful serve/return, strengthen with power, pause with the simulation, and never trigger for a failed release. No per-strike particle nodes or materials are allocated.
 
 ## Portrait layout
 
@@ -45,7 +49,7 @@ godot --headless --path . --fixed-fps 60 --quit-after 7200 -- --auto-rally
 python3 -m http.server 8080 --directory build/web
 ```
 
-For Web testing, use a touch-enabled portrait viewport (including 320px and 390px widths). Verify serve on the court and pad, timed returns, second-bounce/retry, pause/resume without a swing, multitouch/synthetic mouse suppression, portrait framing after rotation, and a clean browser console. Native --headless uses the dummy renderer; browser tests cover actual WebGL rendering. No deployment is required for local validation.
+For Web testing, use a touch-enabled portrait viewport (including 320px and 390px widths). Verify short/long press, the charging gauge, release at the apex, the impact burst, second-bounce/retry, pause/focus cancellation, release outside the pad, multitouch/synthetic mouse suppression, portrait framing after rotation, and a clean browser console. Native --headless uses the dummy renderer; browser tests cover actual WebGL rendering. No deployment is required for local validation.
 
 ## Web deployment and cache updates
 

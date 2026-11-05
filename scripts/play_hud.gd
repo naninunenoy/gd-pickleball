@@ -1,7 +1,7 @@
 class_name PlayHud
 extends CanvasLayer
 
-signal tap_pressed
+signal press_started(source: StringName, id: int)
 signal pause_pressed
 
 const CREAM := Color("eff0d7")
@@ -22,6 +22,7 @@ var _font: Font
 var _last_touch_msec := -1000
 var _touch_index := -1
 var _pad_color := Color.TRANSPARENT
+var _power_fill: StyleBoxFlat
 
 
 func _ready() -> void:
@@ -49,7 +50,7 @@ func _ready() -> void:
 	_message = _label("Find your rhythm.", Vector2(24, 0), Vector2(384, 32), 22, CREAM)
 	_bottom(_message, 225, 32)
 	_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint = _label("One bounce. One tap. Keep it going.", Vector2(24, 0), Vector2(384, 28), 13, MUTED)
+	_hint = _label("Hold for power. Release to hit.", Vector2(24, 0), Vector2(384, 28), 13, MUTED)
 	_bottom(_hint, 187, 28)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_progress = ProgressBar.new()
@@ -57,12 +58,13 @@ func _ready() -> void:
 	_progress.show_percentage = false
 	_progress.max_value = 1.0
 	_progress.add_theme_stylebox_override("background", _box(Color("305346"), 3))
-	_progress.add_theme_stylebox_override("fill", _box(LIME, 3))
+	_power_fill = _box(LIME, 3)
+	_progress.add_theme_stylebox_override("fill", _power_fill)
 	_root.add_child(_progress)
 	_progress.offset_left = 40
 	_progress.offset_right = 392
 	_bottom(_progress, 151, 5)
-	tap_button = _button("TAP TO SERVE", LIME, INK)
+	tap_button = _button("HOLD TO SERVE", LIME, INK)
 	_pin(tap_button, Vector2(24, 0), Vector2(384, 90))
 	_bottom(tap_button, 130, 90)
 	_connect_button(tap_button, false)
@@ -84,32 +86,37 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 	pause_button.text = "Resume" if paused else "Pause"
 	pause_button.add_theme_font_size_override("font_size", 16 if paused else 18)
 	_pause_dim.visible = paused
-	_progress.value = rally.bounce_progress()
+	_progress.value = rally.charge_fraction() if rally.charging else rally.bounce_progress()
+	_power_fill.bg_color = Color("ffb06d") if rally.charging else LIME
 	var ready := rally.can_return()
-	var color := LIME if ready or paused or rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED else Color("b8c9a1")
+	var color := Color("ffb06d") if rally.charging else (LIME if ready or paused or rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED else Color("b8c9a1"))
 	if paused:
 		_message.text = "Take a breath."
 		_hint.text = "Your rally is waiting for you."
 		tap_button.text = "TAP TO RESUME"
+	elif rally.charging:
+		_message.text = "Power %d%%" % int(round(rally.charge_fraction() * 100.0))
+		_hint.text = "Longer hold, faster shot." if rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED else "Release at the top of the bounce."
+		tap_button.text = "RELEASE TO SERVE" if rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED else ("RELEASE NOW" if ready else "RELEASE TO HIT")
 	elif rally.phase == WallRally.Phase.READY:
 		_message.text = "Find your rhythm."
-		_hint.text = "One bounce. One tap. Keep it going."
-		tap_button.text = "TAP TO SERVE"
+		_hint.text = "Hold for power. Release to hit."
+		tap_button.text = "HOLD TO SERVE"
 	elif rally.phase == WallRally.Phase.MISSED:
 		_message.text = "A new best!" if rally.returns > rally.starting_best else "One more rally?"
 		_hint.text = "Second bounce. You made %d return%s." % [rally.returns, "" if rally.returns == 1 else "s"]
-		tap_button.text = "TAP TO TRY AGAIN"
+		tap_button.text = "HOLD TO TRY AGAIN"
 	elif ready:
 		_message.text = "Your moment."
-		_hint.text = "Tap anywhere to return the ball."
-		tap_button.text = "TAP NOW"
+		_hint.text = "Press and release to return the ball."
+		tap_button.text = "PRESS & RELEASE"
 	elif rally.phase == WallRally.Phase.OUTBOUND:
 		_message.text = rally.last_feedback
-		_hint.text = "Watch the rebound."
+		_hint.text = "Hold to prepare your next shot."
 		tap_button.text = "TO THE WALL"
 	else:
 		_message.text = "Let it bounce." if rally.phase == WallRally.Phase.RETURNING else "Get ready."
-		_hint.text = "Your player moves automatically."
+		_hint.text = "Hold now. Release near the peak."
 		tap_button.text = "WAIT FOR THE BOUNCE" if rally.phase == WallRally.Phase.RETURNING else "GET READY"
 	# Keep the same button throughout the rally: no small targets or mode switches.
 	if color != _pad_color:
@@ -125,13 +132,13 @@ func _connect_button(button: Button, is_pause: bool) -> void:
 			_last_touch_msec = Time.get_ticks_msec()
 			if event.pressed and not event.canceled and _touch_index == -1:
 				_touch_index = event.index
-				_emit(is_pause)
+				_emit(is_pause, &"touch", event.index)
 			elif not event.pressed and event.index == _touch_index:
 				_touch_index = -1
 			button.accept_event()
 		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 			if Time.get_ticks_msec() - _last_touch_msec > 600:
-				_emit(is_pause)
+				_emit(is_pause, &"mouse", 0)
 			button.accept_event()
 	)
 
@@ -143,11 +150,11 @@ func _input(event: InputEvent) -> void:
 			_touch_index = -1
 
 
-func _emit(is_pause: bool) -> void:
+func _emit(is_pause: bool, source: StringName, id: int) -> void:
 	if is_pause:
 		pause_pressed.emit()
 	else:
-		tap_pressed.emit()
+		press_started.emit(source, id)
 
 
 func reset_touch() -> void:

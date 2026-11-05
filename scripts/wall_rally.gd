@@ -18,6 +18,8 @@ const BOUNCE_APEX := 2.65
 const TAP_BUFFER := 0.18
 const WINDOW_OPEN := 0.16
 const WINDOW_CLOSE := 0.76
+const MAX_CHARGE_TIME := 0.75
+const MAX_SHOT_SPEED := 1.6
 
 var phase: Phase = Phase.READY
 var dominant_hand: Hand = Hand.RIGHT
@@ -35,6 +37,11 @@ var contact_age := 1.0
 var target_x := WIDTH * 0.5
 var receive_apex := Vector3(WIDTH * 0.5, BOUNCE_APEX, (BOUNCE_Z + LENGTH) * 0.5)
 var swing_buffer := 0.0
+var charging := false
+var charge_time := 0.0
+var shot_charge := 0.0
+var shot_speed := 1.0
+var _pending_charge := 0.0
 var last_feedback := ""
 var _from := Vector3.ZERO
 var _to := Vector3.ZERO
@@ -53,7 +60,9 @@ func reset() -> void:
 	paddle_height = CONTACT_HEIGHT
 	target_x = paddle_position().x
 	receive_apex = trajectory_apex(Vector3(target_x, 0.0, BOUNCE_Z), Vector3(target_x, 0.0, LENGTH), BOUNCE_APEX)
-	swing_buffer = 0.0
+	cancel_charge()
+	shot_charge = 0.0
+	shot_speed = 1.0
 	last_feedback = ""
 	ball_pos = paddle_position()
 	last_contact_pos = ball_pos
@@ -106,11 +115,46 @@ func can_return() -> bool:
 	return phase == Phase.BOUNCED and progress >= WINDOW_OPEN and progress <= WINDOW_CLOSE and paddle_position().distance_to(ball_pos) <= CONTACT_RADIUS
 
 
+func charge_fraction() -> float:
+	return clampf(charge_time / MAX_CHARGE_TIME, 0.0, 1.0)
+
+
+func press() -> void:
+	if charging:
+		return
+	charging = true
+	charge_time = 0.0
+	swing_buffer = 0.0
+	_pending_charge = 0.0
+
+
+func release(held_seconds: float = -1.0) -> void:
+	if not charging:
+		return
+	var power := charge_fraction() if held_seconds < 0.0 else clampf(held_seconds / MAX_CHARGE_TIME, 0.0, 1.0)
+	cancel_charge()
+	_strike(power)
+
+
+func cancel_charge() -> void:
+	charging = false
+	charge_time = 0.0
+	swing_buffer = 0.0
+	_pending_charge = 0.0
+
+
 func tap() -> void:
+	# Instant, uncharged input for diagnostic auto-rallies and model checks.
+	if not charging:
+		_strike(0.0)
+
+
+func _strike(power: float) -> void:
 	if phase == Phase.READY or phase == Phase.MISSED:
 		reset()
-		_launch()
+		_launch(power)
 		return
+	_pending_charge = power
 	swing_buffer = TAP_BUFFER
 	if can_return():
 		_return_ball()
@@ -119,6 +163,10 @@ func tap() -> void:
 
 
 func advance(delta: float) -> void:
+	if phase == Phase.READY or phase == Phase.MISSED:
+		if charging:
+			charge_time = minf(MAX_CHARGE_TIME, charge_time + maxf(delta, 0.0))
+		return
 	# Small steps preserve contact/buffer windows even after a slow browser frame.
 	var remaining := maxf(delta, 0.0)
 	while remaining > 0.000001 and phase != Phase.READY and phase != Phase.MISSED:
@@ -126,6 +174,8 @@ func advance(delta: float) -> void:
 		step = minf(step, maxf(_duration - phase_time, 0.000001))
 		remaining -= step
 		phase_time += step
+		if charging:
+			charge_time = minf(MAX_CHARGE_TIME, charge_time + step)
 		swing_buffer = maxf(0.0, swing_buffer - step)
 		contact_age += step
 		var progress := clampf(phase_time / _duration, 0.0, 1.0)
@@ -147,20 +197,23 @@ func _segment(next_phase: Phase, target: Vector3, duration: float, apex: float) 
 	_apex = apex
 
 
-func _launch() -> void:
+func _launch(power: float = 0.0) -> void:
 	swing_buffer = 0.0
 	bounces = 0
 	last_feedback = "To the wall"
 	last_contact_pos = ball_pos
 	contact_age = 0.0
+	shot_charge = clampf(power, 0.0, 1.0)
+	shot_speed = lerpf(1.0, MAX_SHOT_SPEED, shot_charge)
+	_pending_charge = 0.0
 	var wall_x := clampf(ball_pos.x + sin(float(returns + 1) * 1.7) * 1.8, 2.4, WIDTH - 2.4)
-	_segment(Phase.OUTBOUND, Vector3(wall_x, 3.4, 0.2), 0.72 * pace(), 0.55)
+	_segment(Phase.OUTBOUND, Vector3(wall_x, 3.4, 0.2), 0.72 * pace() / shot_speed, 0.55)
 
 
 func _return_ball() -> void:
 	returns += 1
 	best = maxi(best, returns)
-	_launch()
+	_launch(_pending_charge)
 	last_feedback = "Nice return!" if returns % 5 != 0 else "%d in a row!" % returns
 
 
@@ -171,14 +224,14 @@ func _finish_segment() -> void:
 			wall_hits += 1
 			target_x = clampf(WIDTH * 0.5 + sin(float(wall_hits) * 1.37) * 3.1, 2.0, WIDTH - 2.0)
 			receive_apex = trajectory_apex(Vector3(target_x, 0.0, BOUNCE_Z), Vector3(target_x, 0.0, LENGTH), BOUNCE_APEX)
-			_segment(Phase.RETURNING, Vector3(target_x, 0.0, BOUNCE_Z), 0.92 * pace(), 0.8)
+			_segment(Phase.RETURNING, Vector3(target_x, 0.0, BOUNCE_Z), 0.92 * pace() / shot_speed, 0.8)
 			last_feedback = "Let it bounce"
 		Phase.RETURNING:
 			bounces = 1
-			_segment(Phase.BOUNCED, Vector3(target_x, 0.0, LENGTH), 1.12 * pace(), BOUNCE_APEX)
+			_segment(Phase.BOUNCED, Vector3(target_x, 0.0, LENGTH), 1.12 * pace() / shot_speed, BOUNCE_APEX)
 			last_feedback = "Get ready"
 		Phase.BOUNCED:
 			bounces = 2
 			phase = Phase.MISSED
-			swing_buffer = 0.0
+			cancel_charge()
 			last_feedback = "Second bounce"
