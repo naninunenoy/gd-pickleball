@@ -8,7 +8,9 @@ import re
 import sys
 
 
-def fingerprint_export(out: Path, revision: str = "") -> dict:
+def fingerprint_export(out: Path, revision: str = "", display_id: str = "") -> dict:
+    if display_id and not re.fullmatch(r"[A-Za-z0-9._-]{1,32}", display_id):
+        raise ValueError("Invalid build display identifier")
     html_path = out / "index.html"
     html = html_path.read_text(encoding="utf-8")
     config_match = re.search(r"const GODOT_CONFIG = (.+);", html)
@@ -29,6 +31,7 @@ def fingerprint_export(out: Path, revision: str = "") -> dict:
     digest.update(Path(__file__).read_bytes())
     digest.update(updater.encode())
     digest.update(revision.encode())
+    digest.update(display_id.encode())
     for path in files:
         digest.update(path.name.encode() + b"\0")
         with path.open("rb") as stream:
@@ -45,7 +48,7 @@ def fingerprint_export(out: Path, revision: str = "") -> dict:
     for original, versioned in assets.items():
         html = html.replace(original, versioned)
     updater = updater.replace("__GAME_BUILD__", build)
-    html = html.replace("</head>", f'<meta name="game-build" content="{build}">\n<script>\n{updater}\n</script>\n</head>')
+    html = html.replace("</head>", f'<meta name="game-build" content="{build}">\n<meta name="game-display-build" content="{display_id}">\n<script>\n{updater}\n</script>\n</head>')
     html = html.replace("engine.startGame({", "startCurrentGame({")
     startup = """
 async function startCurrentGame(options) {
@@ -63,10 +66,12 @@ async function startCurrentGame(options) {
     manifest = {"build": build, "executable": executable}
     if revision:
         manifest["revision"] = revision
+    if display_id:
+        manifest["display_id"] = display_id
     (out / "version.json").write_text(json.dumps(manifest) + "\n", encoding="utf-8")
     return manifest
 
 
 if __name__ == "__main__":
-    result = fingerprint_export(Path(sys.argv[1]), sys.argv[2] if len(sys.argv) > 2 else "")
+    result = fingerprint_export(Path(sys.argv[1]), sys.argv[2] if len(sys.argv) > 2 else "", sys.argv[3] if len(sys.argv) > 3 else "")
     print(f"Versioned Web release: {result['build']}")

@@ -25,7 +25,7 @@ class WebExportTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "out"
             self.fixture(root)
-            manifest = fingerprint_export(root, "commit-a")
+            manifest = fingerprint_export(root, "commit-a", "27.1")
             prefix = manifest["executable"]
             html = (root / "index.html").read_text()
             config = json.loads(re.search(r"const GODOT_CONFIG = (.+);", html)[1])
@@ -37,6 +37,8 @@ class WebExportTests(unittest.TestCase):
             self.assertEqual((root / f"{prefix}.pck").read_bytes(), b"game-a")
             self.assertFalse((root / "index.wasm").exists())
             self.assertEqual(json.loads((root / "version.json").read_text()), manifest)
+            self.assertEqual(manifest["display_id"], "27.1")
+            self.assertIn('<meta name="game-display-build" content="27.1">', html)
             self.assertIn("await window.ensureCurrentGameBuild()", html)
             self.assertIn("cache: 'no-store'", html)
             self.assertIn("visibilitychange", html)

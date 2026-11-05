@@ -37,4 +37,6 @@ Open over HTTP, not `file://`. The Web export uses WebGL 2.0 / Compatibility and
 
 Each export gives its JavaScript, WASM, PCK and companion files a release-specific name. The entry page checks `version.json` without using the HTTP cache before starting, when returning to the tab, and when restoring browser history. If the page is stale, it opens the current release automatically. This refreshes game files without deleting personal best records. GitHub Pages does not support setting custom cache response headers from this repository.
 
+The bottom of the game always shows **BUILD <run>.<attempt>** (for example, **BUILD 27.1**). This number is embedded inside the loaded game pack and matches `version.json`'s `display_id`. GitHub Actions supplies the workflow run/attempt automatically. Local Web exports show `BUILD LOCAL`, or use `APP_BUILD_ID=preview-1 ./scripts/export_web.sh` to choose a preview label.
+
 Pushes to `main` run `.github/workflows/web.yml`; GitHub Pages source must be **GitHub Actions**. Public URL after deployment: https://naninunenoy.github.io/gd-pickleball/

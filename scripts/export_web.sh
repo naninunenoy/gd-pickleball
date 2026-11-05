@@ -14,6 +14,25 @@ if [[ ! -x "$GODOT" ]]; then
   exit 1
 fi
 
+# Embed the visible build number inside the game pack, so a fresh HTML page
+# cannot make an old game pack appear current. CI uses workflow run + attempt.
+build_display_id="$(python3 - "$ROOT/build_info.json" <<'PY'
+import json
+import os
+from pathlib import Path
+import re
+import sys
+
+run = os.environ.get("GITHUB_RUN_NUMBER")
+display_id = f"{run}.{os.environ.get('GITHUB_RUN_ATTEMPT', '1')}" if run else os.environ.get("APP_BUILD_ID", "LOCAL")
+if not re.fullmatch(r"[A-Za-z0-9._-]{1,32}", display_id):
+    raise SystemExit("Invalid build display identifier")
+Path(sys.argv[1]).write_text(json.dumps({"display_id": display_id}) + "\n", encoding="utf-8")
+print(display_id)
+PY
+)"
+echo "Visible build: $build_display_id"
+
 mkdir -p "$ROOT/build" "$OUT_DIR"
 # Prevent Godot from importing a previous web export back into the project.
 touch "$ROOT/build/.gdignore"
@@ -57,4 +76,4 @@ PY
 
 # Immutable file URLs prevent old HTTP caches mixing deployments. GitHub Pages
 # does not allow this repository to set response Cache-Control headers.
-python3 "$ROOT/scripts/fingerprint_web.py" "$OUT_DIR" "${GITHUB_SHA:-}"
+python3 "$ROOT/scripts/fingerprint_web.py" "$OUT_DIR" "${GITHUB_SHA:-}" "$build_display_id"

@@ -4,6 +4,7 @@
 .godot/
 /android/
 export_credentials.cfg
+/build_info.json
 
 # Python Web export helpers.
 __pycache__/

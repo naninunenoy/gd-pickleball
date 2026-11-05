@@ -12,6 +12,7 @@ const LIME := Color("d5ed9c")
 var tap_button: Button
 var pause_button: Button
 var power_button: Button
+var build_label: Label
 var _score: Label
 var _best: Label
 var _message: Label
@@ -74,9 +75,9 @@ func _ready() -> void:
 	_pin(power_button, Vector2(296, 0), Vector2(112, 90))
 	_bottom(power_button, 130, 90)
 	_connect_button(power_button, false, true)
-	var foot := _label("SOLO PICKLEBALL  /  WALL SESSION", Vector2(24, 0), Vector2(384, 16), 10, MUTED)
-	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_bottom(foot, 26, 16)
+	build_label = _label(_build_identifier(), Vector2(24, 0), Vector2(384, 22), 16, CREAM)
+	build_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_bottom(build_label, 32, 22)
 	_pause_dim = ColorRect.new()
 	_pause_dim.color = Color(0.06, 0.16, 0.13, 0.94)
 	_pause_dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -84,6 +85,16 @@ func _ready() -> void:
 	_root.add_child(_pause_dim)
 	_root.move_child(_pause_dim, 0)
 	_pause_dim.visible = false
+
+
+func _build_identifier() -> String:
+	if FileAccess.file_exists("res://build_info.json"):
+		var info = JSON.parse_string(FileAccess.get_file_as_string("res://build_info.json"))
+		if info is Dictionary:
+			var identifier = info.get("display_id", "DEV")
+			if identifier is String and not identifier.is_empty():
+				return "BUILD " + identifier
+	return "BUILD DEV"
 
 
 func sync_state(rally: WallRally, paused: bool) -> void:
