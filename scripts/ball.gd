@@ -29,7 +29,7 @@ func sync_practice(rally: WallRally, delta: float) -> void:
 	_sphere.position = rally.ball_pos
 	_shadow.position = Vector3(rally.ball_pos.x, 0.06, rally.ball_pos.z)
 	_landing.visible = rally.phase == WallRally.Phase.RETURNING or rally.phase == WallRally.Phase.BOUNCED
-	_landing.position = Vector3(rally.target_x, 0.055, WallRally.PLAYER_Z - 1.0)
+	_landing.position = Vector3(rally.receive_apex.x, 0.055, rally.receive_apex.z)
 	_landing.scale = Vector3.ONE * (1.05 if rally.can_return() else 0.8)
 	_trail_time += delta
 	if _trail_time >= 0.035:

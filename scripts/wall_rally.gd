@@ -14,6 +14,7 @@ const PADDLE_FORWARD := 1.1
 const CONTACT_RADIUS := 0.42
 const MOVE_SPEED := 16.0
 const BOUNCE_Z := 13.6
+const BOUNCE_APEX := 2.65
 const TAP_BUFFER := 0.18
 const WINDOW_OPEN := 0.16
 const WINDOW_CLOSE := 0.76
@@ -32,6 +33,7 @@ var paddle_height := CONTACT_HEIGHT
 var last_contact_pos := ball_pos
 var contact_age := 1.0
 var target_x := WIDTH * 0.5
+var receive_apex := Vector3(WIDTH * 0.5, BOUNCE_APEX, (BOUNCE_Z + LENGTH) * 0.5)
 var swing_buffer := 0.0
 var last_feedback := ""
 var _from := Vector3.ZERO
@@ -50,6 +52,7 @@ func reset() -> void:
 	player_pos = Vector3(WIDTH * 0.5, 0.0, PLAYER_Z)
 	paddle_height = CONTACT_HEIGHT
 	target_x = paddle_position().x
+	receive_apex = trajectory_apex(Vector3(target_x, 0.0, BOUNCE_Z), Vector3(target_x, 0.0, LENGTH), BOUNCE_APEX)
 	swing_buffer = 0.0
 	last_feedback = ""
 	ball_pos = paddle_position()
@@ -65,17 +68,28 @@ func paddle_position() -> Vector3:
 	return player_pos + Vector3(hand_side() * PADDLE_SIDE, paddle_height, -PADDLE_FORWARD)
 
 
+static func trajectory_apex(start: Vector3, end: Vector3, arc_height: float) -> Vector3:
+	var progress := 1.0 if end.y > start.y else 0.0
+	if arc_height > 0.000001:
+		progress = clampf(0.5 + (end.y - start.y) / (8.0 * arc_height), 0.0, 1.0)
+	var highest := start.lerp(end, progress)
+	highest.y += 4.0 * arc_height * progress * (1.0 - progress)
+	return highest
+
+
+func movement_target() -> Vector3:
+	# Keep the prepared stance until the next wall rebound supplies a new apex.
+	if wall_hits > 0:
+		return Vector3(receive_apex.x - hand_side() * PADDLE_SIDE, 0.0, receive_apex.z + PADDLE_FORWARD)
+	return Vector3(target_x - hand_side() * PADDLE_SIDE, 0.0, PLAYER_Z)
+
+
 func _move_to_contact(step: float) -> void:
-	var target := Vector3(target_x - hand_side() * PADDLE_SIDE, 0.0, PLAYER_Z)
 	var height := CONTACT_HEIGHT
 	if phase == Phase.RETURNING or phase == Phase.BOUNCED:
-		# Wait beside the incoming lane, then follow its playable bounce arc.
-		var contact_z := lerpf(BOUNCE_Z, LENGTH, WINDOW_OPEN)
-		if phase == Phase.BOUNCED:
-			contact_z = clampf(ball_pos.z, contact_z, lerpf(BOUNCE_Z, LENGTH, WINDOW_CLOSE))
-			height = clampf(ball_pos.y, 1.0, 3.0)
-		target.z = contact_z + PADDLE_FORWARD
-	player_pos = player_pos.move_toward(target, MOVE_SPEED * step)
+		# Prepare at the predicted apex; do not chase the live ball after bouncing.
+		height = clampf(receive_apex.y, 1.0, 3.0)
+	player_pos = player_pos.move_toward(movement_target(), MOVE_SPEED * step)
 	paddle_height = move_toward(paddle_height, height, 12.0 * step)
 
 
@@ -156,11 +170,12 @@ func _finish_segment() -> void:
 		Phase.OUTBOUND:
 			wall_hits += 1
 			target_x = clampf(WIDTH * 0.5 + sin(float(wall_hits) * 1.37) * 3.1, 2.0, WIDTH - 2.0)
+			receive_apex = trajectory_apex(Vector3(target_x, 0.0, BOUNCE_Z), Vector3(target_x, 0.0, LENGTH), BOUNCE_APEX)
 			_segment(Phase.RETURNING, Vector3(target_x, 0.0, BOUNCE_Z), 0.92 * pace(), 0.8)
 			last_feedback = "Let it bounce"
 		Phase.RETURNING:
 			bounces = 1
-			_segment(Phase.BOUNCED, Vector3(target_x, 0.0, LENGTH), 1.12 * pace(), 2.65)
+			_segment(Phase.BOUNCED, Vector3(target_x, 0.0, LENGTH), 1.12 * pace(), BOUNCE_APEX)
 			last_feedback = "Get ready"
 		Phase.BOUNCED:
 			bounces = 2

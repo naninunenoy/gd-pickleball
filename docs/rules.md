@@ -8,6 +8,7 @@ One player, one practice wall. Play upright on a phone and try to beat your long
 - The wall sends the ball back. Let it bounce once.
 - When the pad says **TAP NOW**, tap to return the ball to the wall.
 - Your player moves into position automatically. You only control swing timing.
+- Your player anticipates the highest point after the first bounce, moves there, and waits for the ball. Tap as the ball reaches that area.
 - Your player steps beside the rebound and receives it on the right-hand racket, rather than in front of the body.
 - Each successful return adds one to your rally. The opening serve does not count.
 - A second ground bounce ends the rally. Tap to start again; your best stays saved on this device.

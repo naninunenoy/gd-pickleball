@@ -36,7 +36,7 @@ func _run() -> void:
 	_expect(not rally.can_return(), "immediate bounce is outside contact window")
 	_until_return(rally)
 	_expect(rally.can_return(), "bounce rises into the tap window")
-	_expect(rally.paddle_position().distance_to(rally.ball_pos) < 0.01, "automatic footwork puts the racket on the rebound")
+	_expect(rally.paddle_position().distance_to(rally.ball_pos) <= WallRally.CONTACT_RADIUS, "prepared racket reaches the rebound near its apex")
 	var correct_position := rally.player_pos
 	rally.player_pos.x = rally.ball_pos.x
 	_expect(not rally.can_return(), "body contact cannot substitute for racket contact")
@@ -53,9 +53,9 @@ func _run() -> void:
 	rally.advance(10.0)
 	_expect(rally.phase == WallRally.Phase.MISSED and rally.returns == 0, "outbound early tap expires instead of auto-returning")
 	rally.tap()
-	rally.advance(0.72 + 0.92 + 0.10)
+	rally.advance(0.72 + 0.92 + 1.12 * 0.35)
 	rally.tap()
-	rally.advance(0.12)
+	rally.advance(0.18)
 	_expect(rally.returns == 1, "short buffer accepts a slightly early tap")
 	rally.advance(10.0)
 	rally.tap()
@@ -83,6 +83,7 @@ func _run() -> void:
 		rally.tap()
 	_expect(rally.returns == 50 and rally.best == 50 and rally.wall_hits == 50, "sustained rally counts 50 returns")
 	_expect(is_equal_approx(rally.pace(), 0.72), "difficulty has a bounded speed floor")
+	_check_apex_destination()
 	_check_handed_contact()
 
 	# Exercise the real scene and input dispatch, including GUI consumption.
@@ -167,7 +168,8 @@ func _run() -> void:
 		handed_scene._tap()
 		_until_return(handed_scene.rally)
 		handed_scene._sync_visuals(0.0)
-		_expect(handed_scene.player.paddle_contact_position().distance_to(handed_scene.ball._sphere.global_position) < 0.01, "rendered racket meets incoming ball for either hand")
+		_expect(handed_scene.player.paddle_contact_position().distance_to(handed_scene.ball._sphere.global_position) <= WallRally.CONTACT_RADIUS, "rendered racket reaches incoming ball for either hand")
+		_expect(handed_scene.ball._landing.position.distance_to(Vector3(handed_scene.rally.receive_apex.x, 0.055, handed_scene.rally.receive_apex.z)) < 0.001, "ground marker shows predicted apex strike point")
 		var contact: Vector3 = handed_scene.rally.ball_pos
 		handed_scene._tap()
 		handed_scene._sync_visuals(0.0)
@@ -175,6 +177,44 @@ func _run() -> void:
 		handed_scene.free()
 	print("check_slice: %d checks, %d failed" % [checks, failures])
 	quit(0 if failures == 0 else 1)
+
+
+func _check_apex_destination() -> void:
+	var peak := WallRally.trajectory_apex(Vector3(7.0, 0.0, WallRally.BOUNCE_Z), Vector3(7.0, 0.0, WallRally.LENGTH), WallRally.BOUNCE_APEX)
+	_expect(peak.distance_to(Vector3(7.0, 2.65, 18.3)) < 0.001, "predicts highest point of the first bounce")
+	peak = WallRally.trajectory_apex(Vector3(2.0, 1.0, 10.0), Vector3(10.0, 3.0, 20.0), 2.0)
+	_expect(peak.distance_to(Vector3(7.0, 4.125, 16.25)) < 0.001, "apex prediction handles unequal endpoint heights")
+	_expect(WallRally.trajectory_apex(Vector3.ZERO, Vector3(1.0, 3.0, 4.0), 0.0) == Vector3(1.0, 3.0, 4.0), "linear ascending path peaks at its end")
+	_expect(WallRally.trajectory_apex(Vector3(1.0, 3.0, 4.0), Vector3.ZERO, 0.0) == Vector3(1.0, 3.0, 4.0), "linear descending path peaks at its start")
+	_expect(WallRally.trajectory_apex(Vector3.ZERO, Vector3(1.0, 10.0, 4.0), 0.1) == Vector3(1.0, 10.0, 4.0), "apex time stays inside the actual trajectory")
+	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+		var rally := WallRally.new()
+		rally.dominant_hand = hand
+		rally.tap()
+		rally.advance(0.72)
+		var prediction := rally.receive_apex
+		var destination := rally.movement_target()
+		_expect(rally.phase == WallRally.Phase.RETURNING, "apex destination is known before the ground bounce")
+		_expect(destination.distance_to(Vector3(prediction.x - rally.hand_side() * WallRally.PADDLE_SIDE, 0.0, prediction.z + WallRally.PADDLE_FORWARD)) < 0.001, "destination leaves the apex at the dominant-hand racket")
+		rally.advance(0.4)
+		_expect(rally.player_pos.distance_to(destination) < 0.001, "player arrives at the destination before the bounce")
+		rally.advance(0.52)
+		for progress in [0.1, 0.3, 0.5, 0.8]:
+			rally.advance(maxf(0.0, 1.12 * progress - rally.phase_time))
+			_expect(rally.movement_target() == destination and rally.receive_apex == prediction, "destination stays fixed as the ball rises and falls")
+			_expect(rally.player_pos.distance_to(destination) < 0.001, "player waits at the apex destination instead of chasing the ball")
+			_expect(rally.paddle_position().distance_to(prediction) < 0.001, "racket stays prepared at predicted peak height")
+			if progress == 0.5:
+				_expect(rally.ball_pos.distance_to(prediction) < 0.001 and rally.can_return(), "actual ball reaches the predicted racket position at its peak")
+		rally.reset()
+		rally.tap()
+		rally.advance(0.72 + 0.92 + 0.56)
+		var prepared_stance := rally.player_pos
+		rally.tap()
+		rally.advance(0.3)
+		_expect(rally.movement_target() == prepared_stance and rally.player_pos == prepared_stance, "return keeps the prepared stance until a new rebound is known")
+		rally.reset()
+		_expect(rally.movement_target().distance_to(rally.player_pos) < 0.001, "retry clears the previous movement destination")
 
 
 func _check_handed_contact() -> void:
@@ -186,15 +226,16 @@ func _check_handed_contact() -> void:
 		var side := rally.hand_side()
 		_expect(side * (rally.ball_pos.x - rally.player_pos.x) > 1.0, "racket is beside the body on the dominant side")
 		rally.tap()
-		# Early, middle and late taps exercise both lateral and depth tracking.
+		# Sample the approach, peak and departure through the prepared racket.
 		for hit in range(50):
-			var progress: float = [0.17, 0.45, 0.75][hit % 3]
+			var progress: float = [0.47, 0.5, 0.53][hit % 3]
 			for frame in range(600):
 				if rally.phase == WallRally.Phase.BOUNCED and rally.bounce_progress() >= progress:
 					break
 				rally.advance(1.0 / 120.0)
-			_expect(rally.can_return(), "either hand reaches early/middle/late contact throughout a rally")
-			_expect(rally.paddle_position().distance_to(rally.ball_pos) < 0.01, "racket tracks ball height and depth without body contact")
+			_expect(rally.can_return(), "either hand reaches the prepared apex contact throughout a rally")
+			_expect(rally.paddle_position().distance_to(rally.ball_pos) <= WallRally.CONTACT_RADIUS, "ball passes within racket reach near its peak")
+			_expect(rally.player_pos.distance_to(rally.movement_target()) < 0.001, "player stays at the fixed apex destination during sustained rallies")
 			_expect(is_equal_approx(side * (rally.ball_pos.x - rally.player_pos.x), WallRally.PADDLE_SIDE), "rebound stays on the striking-hand side")
 			_expect(rally.player_pos.x > 0.0 and rally.player_pos.x < WallRally.WIDTH, "forehand footwork stays inside the court")
 			var contact := rally.ball_pos
