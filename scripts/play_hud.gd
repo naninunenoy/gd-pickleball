@@ -102,7 +102,7 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 		tap_button.text = "TAP TO RESUME"
 	elif rally.charging:
 		_message.text = "Power %d%%" % int(round(rally.charge_fraction() * 100.0))
-		_hint.text = "Longer hold, faster shot." if rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED else "Release at the top of the bounce."
+		_hint.text = "Longer hold, faster shot." if rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED else "Release when the ball is near your racket."
 		tap_button.text = "CHARGING"
 	elif rally.phase == WallRally.Phase.READY:
 		_message.text = "Find your rhythm."
@@ -112,6 +112,14 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 		_message.text = "A new best!" if rally.returns > rally.starting_best else "One more rally?"
 		_hint.text = "Second bounce. You made %d return%s." % [rally.returns, "" if rally.returns == 1 else "s"]
 		tap_button.text = "TAP TO TRY AGAIN"
+	elif rally.has_queued_shot():
+		_message.text = "Waiting for the ball."
+		_hint.text = "Your shot will hit when the ball arrives."
+		tap_button.text = "SHOT QUEUED"
+	elif rally.phase == WallRally.Phase.BOUNCED and rally.last_feedback == "Too late":
+		_message.text = "The ball has passed."
+		_hint.text = "Try releasing a little earlier."
+		tap_button.text = "TOO LATE"
 	elif ready:
 		_message.text = "Your moment."
 		_hint.text = "Tap now. No hold needed."
@@ -124,7 +132,7 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 		_message.text = "Let it bounce." if rally.phase == WallRally.Phase.RETURNING else "Get ready."
 		_hint.text = "Tap after the bounce."
 		tap_button.text = "WAIT FOR THE BOUNCE" if rally.phase == WallRally.Phase.RETURNING else "GET READY"
-	power_button.text = ("RELEASE\nNOW" if rally.can_return() else "RELEASE\nPOWER") if rally.charging else "HOLD\nPOWER"
+	power_button.text = ("RELEASE\nNOW" if rally.can_power_return() else "RELEASE\nPOWER") if rally.charging else "HOLD\nPOWER"
 	# Keep the same button throughout the rally: no small targets or mode switches.
 	if color != _pad_color:
 		_pad_color = color

@@ -86,6 +86,7 @@ func _run() -> void:
 	_check_apex_destination()
 	_check_handed_contact()
 	_check_charged_shots()
+	_check_power_release_assist()
 
 	# Exercise the real scene and input dispatch, including GUI consumption.
 	var scene = load("res://scenes/main.tscn").instantiate()
@@ -201,6 +202,15 @@ func _run() -> void:
 		handed_scene.rally.advance(RallyBall.IMPACT_DURATION)
 		handed_scene._sync_visuals(0.0)
 		_expect(not handed_scene.ball._impact.visible, "hit effect expires after its brief lifetime")
+		handed_scene.rally.reset()
+		handed_scene.rally.tap()
+		handed_scene.rally.press()
+		handed_scene.rally.advance(0.72 + 0.92 + 1.12 * 0.65)
+		var assisted_contact: Vector3 = handed_scene.rally.ball_pos
+		handed_scene.rally.release()
+		handed_scene._sync_visuals(0.0)
+		_expect(handed_scene.rally.returns == 1 and handed_scene.player.paddle_contact_position().distance_to(assisted_contact) < 0.001, "either hand extends its rendered racket to the assisted late strike")
+		_expect(handed_scene.ball._sphere.position == assisted_contact, "assisted strike does not rewind or teleport the ball")
 		handed_scene.free()
 	print("check_slice: %d checks, %d failed" % [checks, failures])
 	quit(0 if failures == 0 else 1)
@@ -241,13 +251,13 @@ func _check_charged_shots() -> void:
 
 	rally.reset()
 	rally.tap()
-	rally.advance(0.72 + 0.92 + 1.12 * 0.25)
+	rally.advance(0.72 + 0.92)
 	rally.press()
 	rally.advance(0.1)
 	var buffered_power := rally.charge_fraction()
 	rally.release()
 	_expect(rally.returns == 0, "slightly early release buffers a shot")
-	rally.advance(0.18)
+	rally.advance(0.5)
 	_expect(rally.returns == 1 and is_equal_approx(rally.shot_charge, buffered_power), "early-release buffer preserves its selected power")
 
 	rally.reset()
@@ -280,6 +290,70 @@ func _check_charged_shots() -> void:
 			rally.release(held)
 			_expect(is_equal_approx(rally.shot_speed, lerpf(1.0, WallRally.MAX_SHOT_SPEED, held / WallRally.MAX_CHARGE_TIME)), "each released duration sets the next shot speed")
 		_expect(rally.returns == 30, "mixed charged shots sustain a rally for either hand")
+
+
+func _release_fixture(hand: int, speed: float, progress: float) -> WallRally:
+	var rally := WallRally.new()
+	rally.dominant_hand = hand
+	rally.press()
+	rally.release(WallRally.MAX_CHARGE_TIME if speed > 1.0 else 0.0)
+	rally.press()
+	rally.advance((0.72 + 0.92 + 1.12 * progress) / speed)
+	return rally
+
+
+func _check_power_release_assist() -> void:
+	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+		for speed in [1.0, WallRally.MAX_SHOT_SPEED]:
+			for progress in [0.35, 0.65]:
+				var rally := _release_fixture(hand, speed, progress)
+				_expect(not rally.can_return() and rally.can_power_return(), "POWER accepts release before and after the former tiny contact window")
+				var contact := rally.ball_pos
+				rally.release()
+				_expect(rally.returns == 1 and is_equal_approx(rally.shot_speed, WallRally.MAX_SHOT_SPEED), "early/late release returns immediately with held power for either hand and speed")
+				_expect(rally.ball_pos == contact and rally.last_contact_pos == contact, "assistance strikes from the real current ball position")
+		var wrong_side := _release_fixture(hand, 1.0, 0.65)
+		wrong_side.player_pos.x = wrong_side.ball_pos.x
+		_expect(not wrong_side.can_power_return(), "POWER assistance still rejects body-centered contact")
+
+	var early := WallRally.new()
+	early.tap()
+	early.advance(0.72 + 0.92)
+	early.press()
+	early.advance(0.02)
+	var power := early.charge_fraction()
+	early.release()
+	_expect(early.returns == 0 and early.has_queued_shot(), "release just after the first bounce queues instead of being lost")
+	early.advance(0.5)
+	_expect(early.returns == 1 and is_equal_approx(early.shot_charge, power), "longer release buffer preserves early input and shot power")
+	var full_early := WallRally.new()
+	full_early.tap()
+	full_early.press()
+	full_early.advance(WallRally.MAX_CHARGE_TIME)
+	full_early.release()
+	_expect(full_early.has_queued_shot() and full_early.returns == 0, "releasing at full power before the bounce retains the shot")
+	full_early.advance(1.6)
+	_expect(full_early.returns == 1 and is_equal_approx(full_early.shot_speed, WallRally.MAX_SHOT_SPEED), "early full-power release waits for this ball instead of expiring")
+
+	var canceled := _release_fixture(WallRally.Hand.RIGHT, 1.0, 0.02)
+	canceled.release()
+	canceled.cancel_charge()
+	canceled.advance(1.5)
+	_expect(canceled.returns == 0 and not canceled._pending_power, "canceling an assisted queued shot prevents a later hit")
+	var late := _release_fixture(WallRally.Hand.RIGHT, 1.0, 0.9)
+	_expect(not late.can_power_return(), "a ball beyond racket reach is still a miss")
+	late.release()
+	_expect(is_zero_approx(late.swing_buffer) and late.last_feedback == "Too late", "a passed ball is reported as late instead of falsely queued")
+	late.advance(0.5)
+	_expect(late.phase == WallRally.Phase.MISSED and late.returns == 0, "assistance cannot hit after a second bounce")
+
+	var normal := _release_fixture(WallRally.Hand.RIGHT, 1.0, 0.2)
+	normal.release()
+	normal.tap()
+	normal.advance(0.14)
+	_expect(normal.returns == 0 and not normal._pending_power, "switching to a normal tap does not inherit POWER reach")
+	normal.advance(0.25)
+	_expect(normal.returns == 1 and is_equal_approx(normal.shot_speed, 1.0), "normal tap keeps its original speed and contact behavior")
 
 
 func _check_simple_taps(scene) -> void:

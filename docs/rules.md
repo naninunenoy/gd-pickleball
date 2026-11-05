@@ -16,7 +16,7 @@ One player, one practice wall. Play upright on a phone and try to beat your long
 
 The separate **HOLD POWER** button is optional. Normal taps remain the main way to play.
 
-Hold POWER to build speed, then release near the top of the bounce. A longer hold gives a faster shot, capped at 0.75 seconds and 1.6 times normal speed. Its wall return keeps that speed. A release up to 0.18 seconds early can wait for racket contact. Holding never fires automatically, and releasing after a missed second bounce does not restart the rally. A fresh press is required to retry.
+Hold POWER to build speed, then release when the ball is near your racket after one bounce. POWER allows extra fore/aft racket reach, so you can release before or after the exact peak. An early release stays queued until this ball reaches the racket, without a short timeout; the screen shows **SHOT QUEUED** while waiting. Releasing at full charge before the bounce is also accepted. A longer hold gives a faster shot, capped at 0.75 seconds and 1.6 times normal speed. Its wall return keeps that speed. Holding never fires automatically, and releasing after a missed second bounce does not restart the rally. A fresh press is required to retry.
 
 No aiming, dragging, double-tapping or shot selection is needed for normal play. A successful hit produces a short ring and spark burst. A pause, app switch or canceled touch cancels a POWER hold and queued input. The rally gradually speeds up with its length, and wall returns follow the existing left/right pattern.
 

@@ -12,10 +12,10 @@ const CONTACT_HEIGHT := 2.2
 const PADDLE_SIDE := 1.15
 const PADDLE_FORWARD := 1.1
 const CONTACT_RADIUS := 0.42
+const POWER_CONTACT_RADIUS := 1.8
 const MOVE_SPEED := 16.0
 const BOUNCE_Z := 13.6
 const BOUNCE_APEX := 2.65
-const TAP_BUFFER := 0.18
 const NORMAL_TAP_BUFFER := 0.35
 const WINDOW_OPEN := 0.16
 const WINDOW_CLOSE := 0.76
@@ -43,6 +43,7 @@ var charge_time := 0.0
 var shot_charge := 0.0
 var shot_speed := 1.0
 var _pending_charge := 0.0
+var _pending_power := false
 var last_feedback := ""
 var _from := Vector3.ZERO
 var _to := Vector3.ZERO
@@ -116,6 +117,17 @@ func can_return() -> bool:
 	return phase == Phase.BOUNCED and progress >= WINDOW_OPEN and progress <= WINDOW_CLOSE and paddle_position().distance_to(ball_pos) <= CONTACT_RADIUS
 
 
+func can_power_return() -> bool:
+	var progress := bounce_progress()
+	var paddle := paddle_position()
+	# Allow fore/aft racket reach while keeping the ball on the striking-hand side.
+	return phase == Phase.BOUNCED and progress >= WINDOW_OPEN and progress <= WINDOW_CLOSE and absf(paddle.x - ball_pos.x) <= CONTACT_RADIUS and paddle.distance_to(ball_pos) <= POWER_CONTACT_RADIUS
+
+
+func has_queued_shot() -> bool:
+	return _pending_power or swing_buffer > 0.0
+
+
 func can_tap() -> bool:
 	return can_return() or (phase == Phase.BOUNCED and phase_time + NORMAL_TAP_BUFFER >= _duration * 0.5 and ball_pos.z <= receive_apex.z)
 
@@ -131,6 +143,7 @@ func press() -> void:
 	charge_time = 0.0
 	swing_buffer = 0.0
 	_pending_charge = 0.0
+	_pending_power = false
 
 
 func release(held_seconds: float = -1.0) -> void:
@@ -138,7 +151,7 @@ func release(held_seconds: float = -1.0) -> void:
 		return
 	var power := charge_fraction() if held_seconds < 0.0 else clampf(held_seconds / MAX_CHARGE_TIME, 0.0, 1.0)
 	cancel_charge()
-	_strike(power)
+	_strike(power, 0.0, true)
 
 
 func cancel_charge() -> void:
@@ -146,6 +159,7 @@ func cancel_charge() -> void:
 	charge_time = 0.0
 	swing_buffer = 0.0
 	_pending_charge = 0.0
+	_pending_power = false
 
 
 func tap() -> void:
@@ -154,14 +168,20 @@ func tap() -> void:
 		_strike(0.0, NORMAL_TAP_BUFFER)
 
 
-func _strike(power: float, buffer_time: float = TAP_BUFFER) -> void:
+func _strike(power: float, buffer_time: float, power_release: bool = false) -> void:
 	if phase == Phase.READY or phase == Phase.MISSED:
 		reset()
 		_launch(power)
 		return
+	var reachable := can_power_return() if power_release else can_return()
+	if not reachable and phase == Phase.BOUNCED and ball_pos.z > receive_apex.z:
+		cancel_charge()
+		last_feedback = "Too late"
+		return
 	_pending_charge = power
+	_pending_power = power_release
 	swing_buffer = buffer_time
-	if can_return():
+	if reachable:
 		_return_ball()
 	else:
 		last_feedback = "Too late" if phase == Phase.BOUNCED and bounce_progress() > WINDOW_CLOSE else "Let it bounce"
@@ -187,7 +207,7 @@ func advance(delta: float) -> void:
 		ball_pos = _from.lerp(_to, progress)
 		ball_pos.y += 4.0 * _apex * progress * (1.0 - progress)
 		_move_to_contact(step)
-		if swing_buffer > 0.0 and can_return():
+		if has_queued_shot() and (can_power_return() if _pending_power else can_return()):
 			_return_ball()
 		elif phase_time >= _duration - 0.000001:
 			_finish_segment()
@@ -211,6 +231,7 @@ func _launch(power: float = 0.0) -> void:
 	shot_charge = clampf(power, 0.0, 1.0)
 	shot_speed = lerpf(1.0, MAX_SHOT_SPEED, shot_charge)
 	_pending_charge = 0.0
+	_pending_power = false
 	var wall_x := clampf(ball_pos.x + sin(float(returns + 1) * 1.7) * 1.8, 2.4, WIDTH - 2.4)
 	_segment(Phase.OUTBOUND, Vector3(wall_x, 3.4, 0.2), 0.72 * pace() / shot_speed, 0.55)
 
