@@ -12,6 +12,7 @@ var _active_touch := -1
 var _press_source: StringName = &""
 var _press_id := -1
 var _press_started_msec := 0
+var _power_press := false
 var _last_returns := 0
 var _last_wall_hits := 0
 var _saved_best := 0
@@ -64,7 +65,7 @@ func _sync_visuals(delta: float) -> void:
 	hud.sync_state(rally, paused)
 
 
-func _begin_press(source: StringName, id: int) -> void:
+func _begin_press(source: StringName, id: int, power: bool = false) -> void:
 	if paused:
 		paused = false
 		_cancel_press()
@@ -74,7 +75,11 @@ func _begin_press(source: StringName, id: int) -> void:
 	_press_source = source
 	_press_id = id
 	_press_started_msec = Time.get_ticks_msec()
-	rally.press()
+	_power_press = power
+	if power:
+		rally.press()
+	else:
+		_tap()
 
 
 func _finish_press(source: StringName, id: int) -> void:
@@ -83,6 +88,9 @@ func _finish_press(source: StringName, id: int) -> void:
 	var held := maxf(0.0, float(Time.get_ticks_msec() - _press_started_msec) / 1000.0)
 	_press_source = &""
 	_press_id = -1
+	if not _power_press:
+		return
+	_power_press = false
 	var starting := rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED
 	rally.release(held)
 	if starting and rally.phase == WallRally.Phase.OUTBOUND:
@@ -93,6 +101,7 @@ func _cancel_press() -> void:
 	_press_source = &""
 	_press_id = -1
 	_press_started_msec = 0
+	_power_press = false
 	rally.cancel_charge()
 
 
@@ -103,7 +112,7 @@ func _reset_round_tracking() -> void:
 
 
 func _tap() -> void:
-	# Instant short shot for the diagnostic auto-rally, not a user press event.
+	# Normal input and the diagnostic auto-rally share the instant tap action.
 	var starting := rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED
 	rally.tap()
 	if starting and rally.phase == WallRally.Phase.OUTBOUND:
@@ -163,7 +172,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		var key: int = event.physical_keycode if event.physical_keycode != 0 else event.keycode
 		match key:
 			KEY_SPACE, KEY_ENTER:
-				_begin_press(&"key", int(key))
+				_begin_press(&"key", int(key), event.shift_pressed)
 			KEY_P, KEY_ESCAPE:
 				_toggle_pause()
 			KEY_R:

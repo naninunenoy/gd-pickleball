@@ -2,24 +2,26 @@
 
 One player, one practice wall. Play upright on a phone and try to beat your longest rally. All in-game text stays English.
 
-## Tap to play
+## Normal taps
 
-- Press the court or the large bottom pad, then release to serve.
-- The wall sends the ball back. Let it bounce once.
-- Hold to build power, then release as the ball reaches the top of its bounce.
-- A short press gives a slower shot; a longer hold gives a faster shot. Power reaches its limit after 0.75 seconds and does not fire automatically.
-- Your player moves into position automatically. You control release timing and shot speed.
-- Your player anticipates the highest point after the first bounce, moves there, and waits for the ball. You can begin holding before the ball arrives, then release at that area.
-- Your player steps beside the rebound and receives it on the right-hand racket, rather than in front of the body.
-- Each successful return adds one to your rally. The opening serve does not count.
-- A second ground bounce ends the rally. Press and release again to restart; your best stays saved on this device.
+- Tap the court or the large main button to serve and return.
+- A normal tap hits on press. No holding or release timing is required.
+- Let the wall's return bounce once. You can tap a little early: the shot waits up to 0.35 seconds for the ball to reach the racket.
+- Your player anticipates the highest point after the first bounce, moves there, and waits with the right-hand racket beside the rebound.
+- Every successful return counts once. Serving does not count.
+- A second ground bounce ends the rally. Tap to retry; your personal best stays saved.
+- Holding or releasing the normal tap button does not add a second shot or change the speed.
 
-There is one shot. No dragging, aiming, double-tapping, or Soft / Hard selection is needed. A release slightly before the return window is buffered for 0.18 seconds with its chosen power. Pressing without releasing never swings. Holding beyond a second bounce cannot restart the rally on release. A pause, app switch or canceled touch cancels the held shot. A successful strike produces a short ring and spark burst at the racket.
+## Optional POWER shot
 
-The ball gradually speeds up as the rally grows. Holding can increase shot speed up to 1.6 times the short-press speed; the wall's return and bounce keep that speed. The wall varies the return from side to side, within the player's automatic reach. Only returns after the first ground bounce are legal.
+The separate **HOLD POWER** button is optional. Normal taps remain the main way to play.
+
+Hold POWER to build speed, then release near the top of the bounce. A longer hold gives a faster shot, capped at 0.75 seconds and 1.6 times normal speed. Its wall return keeps that speed. A release up to 0.18 seconds early can wait for racket contact. Holding never fires automatically, and releasing after a missed second bounce does not restart the rally. A fresh press is required to retry.
+
+No aiming, dragging, double-tapping or shot selection is needed for normal play. A successful hit produces a short ring and spark burst. A pause, app switch or canceled touch cancels a POWER hold and queued input. The rally gradually speeds up with its length, and wall returns follow the existing left/right pattern.
 
 ## Screen and pause
 
-The game uses a portrait court view. On a wider screen it keeps the same tall play area with space at the sides. The large bottom pad is reachable with either thumb. The Pause button freezes play; tap Resume or the court to continue without swinging. Leaving the browser tab or app pauses an active rally.
+The game uses a portrait court view. Wider screens retain the same tall play area. The large normal tap button and optional POWER button are at the bottom. Pause freezes play; tap Resume or the court to continue without hitting. Leaving the app or tab pauses an active rally.
 
-Desktop fallback: hold/release the mouse or Space / Enter to serve and return. P / Escape pauses. R starts a fresh rally. Best is retained when restarting and can be reset by clearing the game's local storage.
+Desktop: click or Space / Enter for an immediate normal shot. Hold the POWER button or Shift + Space / Enter for an optional charged shot. P / Escape pauses. R resets the rally. Personal best survives retries and can be reset by clearing local site data.

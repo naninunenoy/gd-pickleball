@@ -16,6 +16,7 @@ const MOVE_SPEED := 16.0
 const BOUNCE_Z := 13.6
 const BOUNCE_APEX := 2.65
 const TAP_BUFFER := 0.18
+const NORMAL_TAP_BUFFER := 0.35
 const WINDOW_OPEN := 0.16
 const WINDOW_CLOSE := 0.76
 const MAX_CHARGE_TIME := 0.75
@@ -115,6 +116,10 @@ func can_return() -> bool:
 	return phase == Phase.BOUNCED and progress >= WINDOW_OPEN and progress <= WINDOW_CLOSE and paddle_position().distance_to(ball_pos) <= CONTACT_RADIUS
 
 
+func can_tap() -> bool:
+	return can_return() or (phase == Phase.BOUNCED and phase_time + NORMAL_TAP_BUFFER >= _duration * 0.5 and ball_pos.z <= receive_apex.z)
+
+
 func charge_fraction() -> float:
 	return clampf(charge_time / MAX_CHARGE_TIME, 0.0, 1.0)
 
@@ -144,18 +149,18 @@ func cancel_charge() -> void:
 
 
 func tap() -> void:
-	# Instant, uncharged input for diagnostic auto-rallies and model checks.
+	# Normal shots fire on press; an early tap waits briefly for racket contact.
 	if not charging:
-		_strike(0.0)
+		_strike(0.0, NORMAL_TAP_BUFFER)
 
 
-func _strike(power: float) -> void:
+func _strike(power: float, buffer_time: float = TAP_BUFFER) -> void:
 	if phase == Phase.READY or phase == Phase.MISSED:
 		reset()
 		_launch(power)
 		return
 	_pending_charge = power
-	swing_buffer = TAP_BUFFER
+	swing_buffer = buffer_time
 	if can_return():
 		_return_ball()
 	else:
