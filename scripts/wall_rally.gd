@@ -22,6 +22,8 @@ const WINDOW_CLOSE := 0.76
 const MIN_POWER_HOLD := 0.2
 const MAX_CHARGE_TIME := 0.75
 const MAX_SHOT_SPEED := 1.6
+const SWIPE_LATERAL_REACH := 4.5
+const SWIPE_HEIGHT_REACH := 1.4
 
 var phase: Phase = Phase.READY
 var dominant_hand: Hand = Hand.RIGHT
@@ -43,8 +45,10 @@ var charging := false
 var charge_time := 0.0
 var shot_charge := 0.0
 var shot_speed := 1.0
+var shot_aim := Vector2.ZERO
 var _pending_charge := 0.0
 var _pending_power := false
+var _pending_aim := Vector2.ZERO
 var last_feedback := ""
 var _from := Vector3.ZERO
 var _to := Vector3.ZERO
@@ -66,6 +70,7 @@ func reset() -> void:
 	cancel_charge()
 	shot_charge = 0.0
 	shot_speed = 1.0
+	shot_aim = Vector2.ZERO
 	last_feedback = ""
 	ball_pos = paddle_position()
 	last_contact_pos = ball_pos
@@ -145,14 +150,15 @@ func press() -> void:
 	swing_buffer = 0.0
 	_pending_charge = 0.0
 	_pending_power = false
+	_pending_aim = Vector2.ZERO
 
 
-func release(held_seconds: float = -1.0) -> void:
+func release(held_seconds: float = -1.0, aim: Vector2 = Vector2.ZERO) -> void:
 	if not charging:
 		return
 	var power := charge_fraction() if held_seconds < 0.0 else clampf(held_seconds / MAX_CHARGE_TIME, 0.0, 1.0)
 	cancel_charge()
-	_strike(power, 0.0, true)
+	_strike(power, 0.0, true, aim)
 
 
 func cancel_charge() -> void:
@@ -161,18 +167,19 @@ func cancel_charge() -> void:
 	swing_buffer = 0.0
 	_pending_charge = 0.0
 	_pending_power = false
+	_pending_aim = Vector2.ZERO
 
 
-func tap() -> void:
+func tap(aim: Vector2 = Vector2.ZERO) -> void:
 	# An early normal tap waits briefly for racket contact.
 	if not charging:
-		_strike(0.0, NORMAL_TAP_BUFFER)
+		_strike(0.0, NORMAL_TAP_BUFFER, false, aim)
 
 
-func _strike(power: float, buffer_time: float, power_release: bool = false) -> void:
+func _strike(power: float, buffer_time: float, power_release: bool = false, aim: Vector2 = Vector2.ZERO) -> void:
 	if phase == Phase.READY or phase == Phase.MISSED:
 		reset()
-		_launch(power)
+		_launch(power, aim)
 		return
 	var reachable := can_power_return() if power_release else can_return()
 	if not reachable and phase == Phase.BOUNCED and ball_pos.z > receive_apex.z:
@@ -181,6 +188,7 @@ func _strike(power: float, buffer_time: float, power_release: bool = false) -> v
 		return
 	_pending_charge = power
 	_pending_power = power_release
+	_pending_aim = aim
 	swing_buffer = buffer_time
 	if reachable:
 		_return_ball()
@@ -223,7 +231,7 @@ func _segment(next_phase: Phase, target: Vector3, duration: float, apex: float) 
 	_apex = apex
 
 
-func _launch(power: float = 0.0) -> void:
+func _launch(power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	swing_buffer = 0.0
 	bounces = 0
 	last_feedback = "To the wall"
@@ -231,16 +239,22 @@ func _launch(power: float = 0.0) -> void:
 	contact_age = 0.0
 	shot_charge = clampf(power, 0.0, 1.0)
 	shot_speed = lerpf(1.0, MAX_SHOT_SPEED, shot_charge)
+	shot_aim = aim.normalized()
 	_pending_charge = 0.0
 	_pending_power = false
+	_pending_aim = Vector2.ZERO
 	var wall_x := clampf(ball_pos.x + sin(float(returns + 1) * 1.7) * 1.8, 2.4, WIDTH - 2.4)
-	_segment(Phase.OUTBOUND, Vector3(wall_x, 3.4, 0.2), 0.72 * pace() / shot_speed, 0.55)
+	var wall_height := 3.4
+	if shot_aim != Vector2.ZERO:
+		wall_x = clampf(ball_pos.x + shot_aim.x * SWIPE_LATERAL_REACH, 2.0, WIDTH - 2.0)
+		wall_height -= shot_aim.y * SWIPE_HEIGHT_REACH
+	_segment(Phase.OUTBOUND, Vector3(wall_x, wall_height, 0.2), 0.72 * pace() / shot_speed, 0.55)
 
 
 func _return_ball() -> void:
 	returns += 1
 	best = maxi(best, returns)
-	_launch(_pending_charge)
+	_launch(_pending_charge, _pending_aim)
 	last_feedback = "Nice return!" if returns % 5 != 0 else "%d in a row!" % returns
 
 
@@ -250,6 +264,10 @@ func _finish_segment() -> void:
 		Phase.OUTBOUND:
 			wall_hits += 1
 			target_x = clampf(WIDTH * 0.5 + sin(float(wall_hits) * 1.37) * 3.1, 2.0, WIDTH - 2.0)
+			if shot_aim != Vector2.ZERO:
+				# Reflect the forward component at the wall; keep lateral direction.
+				var slope := (ball_pos.x - _from.x) / maxf(_from.z - ball_pos.z, 0.1)
+				target_x = clampf(ball_pos.x + slope * (BOUNCE_Z - ball_pos.z), 2.0, WIDTH - 2.0)
 			receive_apex = trajectory_apex(Vector3(target_x, 0.0, BOUNCE_Z), Vector3(target_x, 0.0, LENGTH), BOUNCE_APEX)
 			_segment(Phase.RETURNING, Vector3(target_x, 0.0, BOUNCE_Z), 0.92 * pace() / shot_speed, 0.8)
 			last_feedback = "Let it bounce"

@@ -87,6 +87,7 @@ func _run() -> void:
 	_check_handed_contact()
 	_check_charged_shots()
 	_check_power_release_assist()
+	_check_swipe_trajectories()
 
 	# Exercise the real scene and input dispatch, including GUI consumption.
 	var scene = load("res://scenes/main.tscn").instantiate()
@@ -164,6 +165,7 @@ func _run() -> void:
 	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and is_equal_approx(scene.rally.shot_speed, 1.0), "short Space release fires one normal shot")
 	await _check_simple_taps(scene)
 	await _check_scene_charge_controls(scene)
+	await _check_scene_swipes(scene)
 	scene.free()
 	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
 		var handed_scene = load("res://scenes/main.tscn").instantiate()
@@ -201,6 +203,128 @@ func _run() -> void:
 		handed_scene.free()
 	print("check_slice: %d checks, %d failed" % [checks, failures])
 	quit(0 if failures == 0 else 1)
+
+
+func _check_swipe_trajectories() -> void:
+	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+		for aim in [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN, Vector2(-1, -1), Vector2(1, 1)]:
+			var rally := WallRally.new()
+			rally.dominant_hand = hand
+			rally.reset()
+			var origin := rally.ball_pos
+			rally.tap(aim)
+			rally.advance(0.72)
+			_expect(signf(rally.ball_pos.x - origin.x) == signf(aim.x), "swipe sends the actual ball left/right for either hand")
+			_expect(is_equal_approx(rally.ball_pos.y, 3.4) if aim.y == 0.0 else signf(rally.ball_pos.y - 3.4) == -signf(aim.y), "up/down swipe changes wall impact height")
+			_expect(rally.ball_pos.x >= 2.0 and rally.ball_pos.x <= 10.0 and rally.ball_pos.y >= 1.999 and rally.ball_pos.y <= 4.801, "aimed shots stay on the wall")
+			_expect(signf(rally.target_x - rally.ball_pos.x) in [0.0, signf(aim.x)], "wall rebound preserves lateral shot direction within lane limits")
+			_until_return(rally)
+			_expect(rally.can_return(), "aimed rebound still reaches the prepared racket for either hand")
+			var contact := rally.ball_pos
+			rally.tap(-aim)
+			_expect(rally.returns == 1 and rally.ball_pos == contact and rally.shot_aim.is_equal_approx((-aim).normalized()), "return changes direction without moving the contact point")
+		# Opposite aimed rebounds require the longest footwork at maximum speed.
+		var fast := WallRally.new()
+		fast.dominant_hand = hand
+		fast.reset()
+		fast.press()
+		fast.release(0.75, Vector2.LEFT)
+		for hit in range(40):
+			_until_return(fast)
+			_expect(fast.can_return(), "either hand reaches alternating aimed rebounds at maximum rally speed")
+			fast.press()
+			fast.release(0.75, Vector2.RIGHT if hit % 2 == 0 else Vector2.LEFT)
+		_expect(fast.returns == 40 and is_equal_approx(fast.pace(), 0.72), "aimed fast rally reaches difficulty cap without unreachable rebounds")
+
+	var normal := WallRally.new()
+	normal.tap()
+	normal.advance(0.72 + 0.92 + 1.12 * 0.2)
+	normal.tap(Vector2.LEFT)
+	normal.advance(0.35)
+	_expect(normal.returns == 1 and normal.shot_aim == Vector2.LEFT and is_equal_approx(normal.shot_speed, 1.0), "early normal tap preserves swipe direction until contact")
+	var power := WallRally.new()
+	power.tap()
+	power.press()
+	power.advance(0.75)
+	power.release(0.75, Vector2.RIGHT)
+	power.advance(1.6)
+	_expect(power.returns == 1 and power.shot_aim == Vector2.RIGHT and is_equal_approx(power.shot_speed, WallRally.MAX_SHOT_SPEED), "early strong release preserves direction and speed together")
+	power.advance(10.0)
+	power.tap()
+	_expect(power.shot_aim == Vector2.ZERO, "retry without swiping restores the original shot pattern")
+	power.press()
+	power.release(0.75, Vector2.LEFT)
+	power.cancel_charge()
+	_expect(power._pending_aim == Vector2.ZERO and not power.has_queued_shot(), "cancellation clears a queued swipe")
+
+
+func _check_scene_swipes(scene) -> void:
+	var start := Vector2(216, 480)
+	for held in [0.05, 0.8]:
+		for aim in [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]:
+			scene._cancel_press()
+			scene.rally.reset()
+			_touch(start, true)
+			await process_frame
+			var drag := InputEventScreenDrag.new()
+			drag.index = 0
+			drag.position = root.get_screen_transform() * (start + aim * 100.0)
+			Input.parse_input_event(drag)
+			await process_frame
+			_expect(scene.hud._swipe_arrow.visible and scene.rally.phase == WallRally.Phase.READY, "swipe previews direction without hitting before release")
+			scene._press_started_msec = Time.get_ticks_msec() - int(held * 1000.0)
+			_touch(start + aim * 100.0, false)
+			await process_frame
+			var speed := 1.0 if held < WallRally.MIN_POWER_HOLD else WallRally.MAX_SHOT_SPEED
+			_expect(scene.rally.shot_aim.is_equal_approx(aim) and is_equal_approx(scene.rally.shot_speed, speed), "short and held gestures aim independently of shot speed")
+			_expect(not scene.hud._swipe_arrow.visible and not scene.rally.has_queued_shot(), "release consumes the arrow and gesture exactly once")
+	scene._cancel_press()
+	scene.rally.reset()
+	_touch(start, true)
+	await process_frame
+	scene._press_started_msec = Time.get_ticks_msec() - 50
+	_touch(start + Vector2(4, 3), false)
+	await process_frame
+	_expect(scene.rally.shot_aim == Vector2.ZERO, "small finger jitter keeps ordinary tap direction")
+	# Only the owning finger may aim, including the final release position.
+	scene.rally.reset()
+	_touch(start, true)
+	await process_frame
+	var other := InputEventScreenDrag.new()
+	other.index = 1
+	other.position = root.get_screen_transform() * (start + Vector2(100, 0))
+	Input.parse_input_event(other)
+	await process_frame
+	_expect(scene._swipe_direction == Vector2.ZERO and not scene.hud._swipe_arrow.visible, "secondary finger cannot change aim")
+	scene._press_started_msec = Time.get_ticks_msec() - 50
+	_touch(start - Vector2(100, 0), false)
+	await process_frame
+	_expect(scene.rally.shot_aim == Vector2.LEFT, "release position aims even without an intermediate drag event")
+	# Mouse drag uses the same aiming path; keyboard keeps automatic direction.
+	scene.rally.reset()
+	scene._touch_until = 0
+	var mouse := InputEventMouseButton.new()
+	mouse.position = root.get_screen_transform() * start
+	mouse.button_index = MOUSE_BUTTON_LEFT
+	mouse.pressed = true
+	Input.parse_input_event(mouse)
+	await process_frame
+	scene._press_started_msec = Time.get_ticks_msec() - 50
+	mouse = mouse.duplicate() as InputEventMouseButton
+	mouse.position = root.get_screen_transform() * (start + Vector2(100, 0))
+	mouse.pressed = false
+	Input.parse_input_event(mouse)
+	await process_frame
+	_expect(scene.rally.shot_aim == Vector2.RIGHT, "desktop drag controls actual shot direction")
+	scene.rally.reset()
+	_touch(start, true)
+	await process_frame
+	scene._update_swipe(&"touch", 0, start + Vector2(100, 0))
+	scene.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	_expect(scene._swipe_direction == Vector2.ZERO and not scene.hud._swipe_arrow.visible, "focus loss clears swipe preview and direction")
+	_touch(start, false)
+	await process_frame
+	_expect(scene.rally.phase == WallRally.Phase.READY, "canceled swipe cannot fire on release")
 
 
 func _check_charged_shots() -> void:

@@ -16,6 +16,7 @@ var _pause_dim: ColorRect
 var _root: Control
 var _font: Font
 var _power_fill: StyleBoxFlat
+var _swipe_arrow: Line2D
 
 
 func _ready() -> void:
@@ -54,7 +55,7 @@ func _ready() -> void:
 	_progress.offset_left = 40
 	_progress.offset_right = 392
 	_bottom(_progress, 151, 5)
-	_gesture_hint = _label("Tap: normal shot  /  Hold + release: power", Vector2(24, 0), Vector2(384, 28), 13, MUTED)
+	_gesture_hint = _label("Swipe to aim  /  Hold for power", Vector2(24, 0), Vector2(384, 28), 13, MUTED)
 	_gesture_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_bottom(_gesture_hint, 100, 28)
 	build_label = _label(_build_identifier(), Vector2(24, 0), Vector2(384, 22), 16, CREAM)
@@ -67,6 +68,23 @@ func _ready() -> void:
 	_root.add_child(_pause_dim)
 	_root.move_child(_pause_dim, 0)
 	_pause_dim.visible = false
+	_swipe_arrow = Line2D.new()
+	_swipe_arrow.width = 3.0
+	_swipe_arrow.default_color = LIME
+	_swipe_arrow.antialiased = true
+	_swipe_arrow.visible = false
+	_root.add_child(_swipe_arrow)
+
+
+func show_swipe(start: Vector2, end: Vector2) -> void:
+	var direction := (end - start).normalized()
+	_swipe_arrow.points = PackedVector2Array([start, end, end - direction.rotated(-0.55) * 16.0, end, end - direction.rotated(0.55) * 16.0])
+	_swipe_arrow.visible = true
+
+
+func clear_swipe() -> void:
+	if is_instance_valid(_swipe_arrow):
+		_swipe_arrow.visible = false
 
 
 func _build_identifier() -> String:
@@ -80,6 +98,8 @@ func _build_identifier() -> String:
 
 
 func sync_state(rally: WallRally, paused: bool) -> void:
+	if not rally.charging:
+		clear_swipe()
 	_score.text = "%02d" % rally.returns
 	_best.text = "%02d" % rally.best
 	_pause_dim.visible = paused

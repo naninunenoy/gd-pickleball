@@ -1,6 +1,7 @@
 extends Node3D
 
 const SAVE_PATH := "user://wall_practice.cfg"
+const SWIPE_DEADZONE := 14.0 # Reference viewport pixels, independent of phone size.
 
 @export var dominant_hand: WallRally.Hand = WallRally.Hand.RIGHT
 
@@ -12,6 +13,8 @@ var _active_touch := -1
 var _press_source: StringName = &""
 var _press_id := -1
 var _press_started_msec := 0
+var _press_origin := Vector2.ZERO
+var _swipe_direction := Vector2.ZERO
 var _last_returns := 0
 var _last_wall_hits := 0
 var _saved_best := 0
@@ -62,7 +65,7 @@ func _sync_visuals(delta: float) -> void:
 	hud.sync_state(rally, paused)
 
 
-func _begin_press(source: StringName, id: int) -> void:
+func _begin_press(source: StringName, id: int, position: Vector2 = Vector2.ZERO) -> void:
 	if paused:
 		paused = false
 		_cancel_press()
@@ -72,25 +75,42 @@ func _begin_press(source: StringName, id: int) -> void:
 	_press_source = source
 	_press_id = id
 	_press_started_msec = Time.get_ticks_msec()
+	_press_origin = position
+	_swipe_direction = Vector2.ZERO
+	hud.clear_swipe()
 	# One gesture owns both actions. Never hit on down: it may become a hold.
 	rally.press()
+
+
+func _update_swipe(source: StringName, id: int, position: Vector2) -> void:
+	if source != _press_source or id != _press_id or not rally.charging:
+		return
+	var movement := position - _press_origin
+	_swipe_direction = movement.normalized() if movement.length() >= SWIPE_DEADZONE else Vector2.ZERO
+	if _swipe_direction != Vector2.ZERO:
+		hud.show_swipe(_press_origin, position)
+	else:
+		hud.clear_swipe()
 
 
 func _finish_press(source: StringName, id: int) -> void:
 	if source != _press_source or id != _press_id:
 		return
 	var held := maxf(0.0, float(Time.get_ticks_msec() - _press_started_msec) / 1000.0)
+	var aim := _swipe_direction
 	_press_source = &""
 	_press_id = -1
+	_swipe_direction = Vector2.ZERO
+	hud.clear_swipe()
 	var starting := rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED
 	if held < WallRally.MIN_POWER_HOLD:
 		# A canceled/missed hold must not turn into a tap that restarts play.
 		var valid := rally.charging
 		rally.cancel_charge()
 		if valid:
-			rally.tap()
+			rally.tap(aim)
 	else:
-		rally.release(held)
+		rally.release(held, aim)
 	if starting and rally.phase == WallRally.Phase.OUTBOUND:
 		_reset_round_tracking()
 
@@ -99,6 +119,10 @@ func _cancel_press() -> void:
 	_press_source = &""
 	_press_id = -1
 	_press_started_msec = 0
+	_press_origin = Vector2.ZERO
+	_swipe_direction = Vector2.ZERO
+	if is_instance_valid(hud):
+		hud.clear_swipe()
 	rally.cancel_charge()
 
 
@@ -141,12 +165,17 @@ func _input(event: InputEvent) -> void:
 		elif event.index == _active_touch:
 			_active_touch = -1
 			if _press_source == &"touch" and event.index == _press_id:
+				_update_swipe(&"touch", event.index, event.position)
 				_finish_press(&"touch", event.index)
 				get_viewport().set_input_as_handled()
 	elif event is InputEventScreenDrag:
 		_touch_until = Time.get_ticks_msec() + 600
+		_update_swipe(&"touch", event.index, event.position)
+	elif event is InputEventMouseMotion:
+		_update_swipe(&"mouse", 0, event.position)
 	elif event is InputEventMouseButton and not event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if _press_source == &"mouse":
+			_update_swipe(&"mouse", 0, event.position)
 			_finish_press(&"mouse", 0)
 			get_viewport().set_input_as_handled()
 	elif event is InputEventKey and not event.pressed:
@@ -159,11 +188,11 @@ func _input(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		if event.pressed and not event.canceled:
-			_begin_press(&"touch", event.index)
+			_begin_press(&"touch", event.index, event.position)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton:
 		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT and Time.get_ticks_msec() > _touch_until:
-			_begin_press(&"mouse", 0)
+			_begin_press(&"mouse", 0, event.position)
 			get_viewport().set_input_as_handled()
 	elif event is InputEventKey and event.pressed and not event.echo:
 		var key: int = event.physical_keycode if event.physical_keycode != 0 else event.keycode
