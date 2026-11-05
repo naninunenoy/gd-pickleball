@@ -1,29 +1,20 @@
 class_name PlayHud
 extends CanvasLayer
 
-signal press_started(source: StringName, id: int, power: bool)
-signal pause_pressed
-
 const CREAM := Color("eff0d7")
 const MUTED := Color("acbdac")
-const INK := Color("193d33")
 const LIME := Color("d5ed9c")
 
-var tap_button: Button
-var pause_button: Button
-var power_button: Button
 var build_label: Label
 var _score: Label
 var _best: Label
 var _message: Label
 var _hint: Label
+var _gesture_hint: Label
 var _progress: ProgressBar
 var _pause_dim: ColorRect
 var _root: Control
 var _font: Font
-var _last_touch_msec := -1000
-var _touch_index := -1
-var _pad_color := Color.TRANSPARENT
 var _power_fill: StyleBoxFlat
 
 
@@ -41,18 +32,15 @@ func _ready() -> void:
 	_bottom(pad_background, 252, 252)
 	_label("P R A C T I C E   /   0 1", Vector2(24, 36), Vector2(280, 20), 12, MUTED)
 	_label("Wall rally", Vector2(24, 59), Vector2(270, 40), 30, CREAM)
-	pause_button = _button("Pause", Color("2b5144"), CREAM)
-	_pin(pause_button, Vector2(318, 36), Vector2(90, 68))
-	_connect_button(pause_button, true)
 	_label("RALLY", Vector2(24, 116), Vector2(130, 20), 12, MUTED)
 	_score = _label("00", Vector2(20, 130), Vector2(220, 78), 64, CREAM)
 	_label("PERSONAL BEST", Vector2(267, 123), Vector2(142, 20), 11, MUTED)
 	_best = _label("00", Vector2(266, 146), Vector2(140, 50), 34, CREAM)
-	# The pad is anchored above the phone's bottom safe area.
+	# Every HUD element passes input through to the full-screen gesture handler.
 	_message = _label("Find your rhythm.", Vector2(24, 0), Vector2(384, 32), 22, CREAM)
 	_bottom(_message, 225, 32)
 	_message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint = _label("Tap to play. POWER is optional.", Vector2(24, 0), Vector2(384, 28), 13, MUTED)
+	_hint = _label("Tap anywhere to serve.", Vector2(24, 0), Vector2(384, 28), 13, MUTED)
 	_bottom(_hint, 187, 28)
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_progress = ProgressBar.new()
@@ -66,15 +54,9 @@ func _ready() -> void:
 	_progress.offset_left = 40
 	_progress.offset_right = 392
 	_bottom(_progress, 151, 5)
-	tap_button = _button("TAP TO SERVE", LIME, INK)
-	_pin(tap_button, Vector2(24, 0), Vector2(260, 90))
-	_bottom(tap_button, 130, 90)
-	_connect_button(tap_button, false)
-	power_button = _button("HOLD\nPOWER", Color("2b5144"), CREAM)
-	power_button.add_theme_font_size_override("font_size", 18)
-	_pin(power_button, Vector2(296, 0), Vector2(112, 90))
-	_bottom(power_button, 130, 90)
-	_connect_button(power_button, false, true)
+	_gesture_hint = _label("Tap: normal shot  /  Hold + release: power", Vector2(24, 0), Vector2(384, 28), 13, MUTED)
+	_gesture_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_bottom(_gesture_hint, 100, 28)
 	build_label = _label(_build_identifier(), Vector2(24, 0), Vector2(384, 22), 16, CREAM)
 	build_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_bottom(build_label, 32, 22)
@@ -100,91 +82,38 @@ func _build_identifier() -> String:
 func sync_state(rally: WallRally, paused: bool) -> void:
 	_score.text = "%02d" % rally.returns
 	_best.text = "%02d" % rally.best
-	pause_button.text = "Resume" if paused else "Pause"
-	pause_button.add_theme_font_size_override("font_size", 16 if paused else 18)
 	_pause_dim.visible = paused
-	_progress.value = rally.charge_fraction() if rally.charging else rally.bounce_progress()
-	_power_fill.bg_color = Color("ffb06d") if rally.charging else LIME
+	var held := rally.charging and rally.charge_time >= WallRally.MIN_POWER_HOLD
+	_progress.value = rally.charge_fraction() if held else rally.bounce_progress()
+	_power_fill.bg_color = Color("ffb06d") if held else LIME
 	var ready := rally.can_tap()
-	var color := Color("ffb06d") if rally.charging else (LIME if ready or paused or rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED else Color("b8c9a1"))
 	if paused:
 		_message.text = "Take a breath."
-		_hint.text = "Your rally is waiting for you."
-		tap_button.text = "TAP TO RESUME"
-	elif rally.charging:
+		_hint.text = "Tap anywhere to resume."
+	elif held:
 		_message.text = "Power %d%%" % int(round(rally.charge_fraction() * 100.0))
 		_hint.text = "Longer hold, faster shot." if rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED else "Release when the ball is near your racket."
-		tap_button.text = "CHARGING"
 	elif rally.phase == WallRally.Phase.READY:
 		_message.text = "Find your rhythm."
-		_hint.text = "Tap to play. POWER is optional."
-		tap_button.text = "TAP TO SERVE"
+		_hint.text = "Tap anywhere to serve."
 	elif rally.phase == WallRally.Phase.MISSED:
 		_message.text = "A new best!" if rally.returns > rally.starting_best else "One more rally?"
-		_hint.text = "Second bounce. You made %d return%s." % [rally.returns, "" if rally.returns == 1 else "s"]
-		tap_button.text = "TAP TO TRY AGAIN"
+		_hint.text = "Tap anywhere to retry. You made %d return%s." % [rally.returns, "" if rally.returns == 1 else "s"]
 	elif rally.has_queued_shot():
 		_message.text = "Waiting for the ball."
 		_hint.text = "Your shot will hit when the ball arrives."
-		tap_button.text = "SHOT QUEUED"
 	elif rally.phase == WallRally.Phase.BOUNCED and rally.last_feedback == "Too late":
 		_message.text = "The ball has passed."
 		_hint.text = "Try releasing a little earlier."
-		tap_button.text = "TOO LATE"
 	elif ready:
 		_message.text = "Your moment."
-		_hint.text = "Tap now. No hold needed."
-		tap_button.text = "TAP TO RETURN"
+		_hint.text = "Tap anywhere now. No hold needed."
 	elif rally.phase == WallRally.Phase.OUTBOUND:
 		_message.text = rally.last_feedback
-		_hint.text = "Tap for normal shots. POWER is optional."
-		tap_button.text = "TO THE WALL"
+		_hint.text = "Tap anywhere. Hold for optional power."
 	else:
 		_message.text = "Let it bounce." if rally.phase == WallRally.Phase.RETURNING else "Get ready."
-		_hint.text = "Tap after the bounce."
-		tap_button.text = "WAIT FOR THE BOUNCE" if rally.phase == WallRally.Phase.RETURNING else "GET READY"
-	power_button.text = ("RELEASE\nNOW" if rally.can_power_return() else "RELEASE\nPOWER") if rally.charging else "HOLD\nPOWER"
-	# Keep the same button throughout the rally: no small targets or mode switches.
-	if color != _pad_color:
-		_pad_color = color
-		for state in ["normal", "hover", "focus"]:
-			tap_button.add_theme_stylebox_override(state, _box(color, 24))
-
-
-func _connect_button(button: Button, is_pause: bool, is_power: bool = false) -> void:
-	# Handle touch directly; GUI mouse synthesis cannot create a second action.
-	button.gui_input.connect(func(event: InputEvent) -> void:
-		if event is InputEventScreenTouch:
-			_last_touch_msec = Time.get_ticks_msec()
-			if event.pressed and not event.canceled and _touch_index == -1:
-				_touch_index = event.index
-				_emit(is_pause, &"touch", event.index, is_power)
-			elif not event.pressed and event.index == _touch_index:
-				_touch_index = -1
-			button.accept_event()
-		elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			if Time.get_ticks_msec() - _last_touch_msec > 600:
-				_emit(is_pause, &"mouse", 0, is_power)
-			button.accept_event()
-	)
-
-
-func _input(event: InputEvent) -> void:
-	if event is InputEventScreenTouch:
-		_last_touch_msec = Time.get_ticks_msec()
-		if not event.pressed and event.index == _touch_index:
-			_touch_index = -1
-
-
-func _emit(is_pause: bool, source: StringName, id: int, power: bool) -> void:
-	if is_pause:
-		pause_pressed.emit()
-	else:
-		press_started.emit(source, id, power)
-
-
-func reset_touch() -> void:
-	_touch_index = -1
+		_hint.text = "Tap anywhere after the bounce."
 
 
 func _label(text: String, pos: Vector2, size: Vector2, font_size: int, color: Color) -> Label:
@@ -197,22 +126,6 @@ func _label(text: String, pos: Vector2, size: Vector2, font_size: int, color: Co
 	_root.add_child(label)
 	_pin(label, pos, size)
 	return label
-
-
-func _button(text: String, color: Color, text_color: Color) -> Button:
-	var button := Button.new()
-	button.text = text
-	button.focus_mode = Control.FOCUS_NONE
-	button.mouse_filter = Control.MOUSE_FILTER_STOP
-	button.add_theme_font_override("font", _font)
-	button.add_theme_font_size_override("font_size", 22 if text != "Pause" else 18)
-	for state in ["normal", "hover", "focus"]:
-		button.add_theme_stylebox_override(state, _box(color, 24))
-	button.add_theme_stylebox_override("pressed", _box(color.lightened(0.1), 24))
-	for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
-		button.add_theme_color_override(state, text_color)
-	_root.add_child(button)
-	return button
 
 
 func _pin(control: Control, pos: Vector2, dimensions: Vector2) -> void:

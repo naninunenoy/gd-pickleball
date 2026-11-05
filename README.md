@@ -2,9 +2,9 @@
 
 **Wall rally** — solo pickleball practice, made for your phone in portrait.
 
-One player. One wall. Tap to serve and return after one bounce. Normal taps hit on press, with a little early-tap assistance. Footwork is automatic; keep the rally going and beat your saved personal best.
+One player. One wall. Tap anywhere to serve and return after one bounce. Footwork is automatic; keep the rally going and beat your saved personal best.
 
-Use the court or the large main button. The separate POWER button is optional: hold and release for a faster shot, up to 1.6x at 0.75 seconds. Normal play needs no holding, aiming, dragging or double-tapping. A bright ring and sparks mark each strike. Tap to retry after a second bounce. On desktop, click or Space / Enter hits immediately; Shift + Space / Enter charges. P / Escape pauses; R resets. Leaving the app/tab pauses an active rally.
+The entire screen accepts taps and holds, including the score and footer. There are no buttons. Release a short tap for a normal shot, with a little early-tap assistance. Holding for at least 0.2 seconds selects optional power: release near the racket for a faster shot, up to 1.6x at 0.75 seconds. Nothing fires on press, so normal taps and holds never compete. A bright ring and sparks mark each strike. Tap to retry after a second bounce. Desktop click or Space / Enter uses the same gesture. P / Escape pauses; R resets. Leaving the app/tab pauses an active rally; tap anywhere to resume.
 
 - [Player rules](docs/rules.md)
 - [Implementation and validation](docs/implementation.md)

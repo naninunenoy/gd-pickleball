@@ -95,51 +95,32 @@ func _run() -> void:
 	scene._saved_best = 1000000 # Do not alter a developer's saved record in checks.
 	_expect(scene.get_node("World").get_child_count() == 3, "world contains court, exactly one player and one ball")
 	_expect(scene.rally.phase == WallRally.Phase.READY, "scene waits for tap")
-	var small_screen_scale := minf(320.0 / 432.0, 568.0 / 864.0)
-	_expect(scene.hud.tap_button.size.y * small_screen_scale >= 44.0, "main pad remains a 44px touch target on small phones")
-	_expect(scene.hud.pause_button.size.y * small_screen_scale >= 44.0, "pause remains a 44px touch target on small phones")
-	_expect(scene.hud.power_button.size.y * small_screen_scale >= 44.0, "optional POWER remains a 44px touch target on small phones")
-	_expect(scene.hud.tap_button.get_global_rect().end.x < scene.hud.power_button.get_global_rect().position.x, "normal tap and optional POWER have separate non-overlapping targets")
-	_touch(Vector2(210, 480), true)
-	await process_frame
-	_expect(not scene.rally.charging and scene.rally.phase == WallRally.Phase.OUTBOUND, "ordinary touch serves immediately on press")
-	_touch(Vector2(210, 480), false)
-	await process_frame
-	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and is_equal_approx(scene.rally.shot_speed, 1.0), "ordinary touch release does not change the shot")
+	for control in scene.hud.find_children("*", "Control", true, false):
+		_expect(not control is BaseButton and control.mouse_filter == Control.MOUSE_FILTER_IGNORE, "HUD has no buttons or touch-blocking controls")
+	# Header, old pause target, court, former pads and build footer all work alike.
+	for position in [Vector2(24, 40), Vector2(368, 70), Vector2(210, 480), Vector2(200, 775), Vector2(350, 775), Vector2(216, 840), Vector2(3, 400)]:
+		scene.rally.reset()
+		_touch(position, true)
+		await process_frame
+		_expect(scene.rally.charging and scene.rally.phase == WallRally.Phase.READY, "any screen position starts a gesture without hitting on press")
+		scene._press_started_msec = Time.get_ticks_msec() - 50
+		_touch(position, false)
+		await process_frame
+		_expect(not scene.paused and scene.rally.phase == WallRally.Phase.OUTBOUND and is_equal_approx(scene.rally.shot_speed, 1.0), "short tap anywhere serves once at normal speed on release")
 	# Synthetic mouse input following that touch must not arm another swing.
 	_mouse(Vector2(210, 480))
 	await process_frame
-	_expect(is_zero_approx(scene.rally.swing_buffer), "synthetic mouse after touch is ignored")
-	scene.rally.reset()
-	_touch(Vector2(350, 775), true)
-	await process_frame
-	_expect(scene.rally.charging, "optional POWER button begins charging through GUI touch")
-	scene._press_started_msec -= 600
-	_touch(Vector2(210, 480), false)
-	await process_frame
-	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and scene.rally.shot_charge >= 0.8, "release outside the pad uses actual elapsed hold time")
-	_until_return(scene.rally)
-	_touch(Vector2(200, 775), true)
-	await process_frame
-	_touch(Vector2(200, 775), false)
-	await process_frame
-	_expect(scene.rally.returns == 1 and is_equal_approx(scene.rally.shot_speed, 1.0), "ordinary pad returns at normal speed after an optional POWER shot")
-	_touch(Vector2(368, 70), true)
-	await process_frame
-	_touch(Vector2(368, 70), false)
-	await process_frame
-	_expect(scene.paused, "pause button consumes touch without swinging")
+	_expect(not scene.rally.charging and is_zero_approx(scene.rally.swing_buffer), "synthetic mouse after touch is ignored")
+	scene._toggle_pause()
 	var frozen: Vector3 = scene.rally.ball_pos
 	await process_frame
 	_expect(scene.rally.ball_pos == frozen, "pause freezes ball and timer")
-	_touch(Vector2(210, 480), true)
+	_touch(Vector2(216, 840), true)
 	await process_frame
-	_touch(Vector2(210, 480), false)
+	_touch(Vector2(216, 840), false)
 	await process_frame
-	_expect(not scene.paused and is_zero_approx(scene.rally.swing_buffer), "court tap resumes without a new swing")
-	scene.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
-	_expect(scene.paused, "leaving app pauses active rally")
-	scene.paused = false
+	_expect(not scene.paused and not scene.rally.charging and not scene.rally.has_queued_shot(), "tap anywhere resumes without a new swing")
+
 	scene.rally.reset()
 	_touch(Vector2(200, 775), true)
 	await process_frame
@@ -149,32 +130,38 @@ func _run() -> void:
 	second.pressed = true
 	Input.parse_input_event(second)
 	await process_frame
-	_expect(not scene.rally.charging and scene.rally.phase == WallRally.Phase.OUTBOUND and is_equal_approx(scene.rally.shot_speed, 1.0), "second finger cannot turn a normal shot into a held shot")
 	second.pressed = false
 	Input.parse_input_event(second)
+	await process_frame
+	_expect(scene.rally.charging and scene.rally.phase == WallRally.Phase.READY and scene._press_id == 0, "second finger cannot steal or release the primary gesture")
+	scene._press_started_msec = Time.get_ticks_msec() - 50
 	_touch(Vector2(200, 775), false)
 	await process_frame
-	_touch(Vector2(200, 775), true)
+	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and is_equal_approx(scene.rally.shot_speed, 1.0), "primary finger alone decides a normal tap")
+	_touch(Vector2(24, 40), true)
 	await process_frame
 	scene.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
+	_expect(scene.paused and not scene.rally.charging, "leaving app cancels gesture and pauses active rally")
 	# Simulate a lost touch release while switching apps.
-	_touch(Vector2(200, 775), true)
+	_touch(Vector2(24, 40), true)
 	await process_frame
-	_touch(Vector2(200, 775), false)
+	_touch(Vector2(24, 40), false)
 	await process_frame
 	_expect(not scene.paused, "touch ownership resets when switching apps")
+
 	scene.rally.reset()
 	var key := InputEventKey.new()
 	key.physical_keycode = KEY_SPACE
 	key.pressed = true
 	Input.parse_input_event(key)
 	await process_frame
-	_expect(not scene.rally.charging and scene.rally.phase == WallRally.Phase.OUTBOUND, "Space press hits immediately on desktop")
+	_expect(scene.rally.charging and scene.rally.phase == WallRally.Phase.READY, "Space starts the same gesture without firing on press")
+	scene._press_started_msec = Time.get_ticks_msec() - 50
 	var key_up := key.duplicate() as InputEventKey
 	key_up.pressed = false
 	Input.parse_input_event(key_up)
 	await process_frame
-	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND, "Space release cannot add another shot")
+	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and is_equal_approx(scene.rally.shot_speed, 1.0), "short Space release fires one normal shot")
 	await _check_simple_taps(scene)
 	await _check_scene_charge_controls(scene)
 	scene.free()
@@ -360,34 +347,40 @@ func _check_simple_taps(scene) -> void:
 	scene.paused = false
 	scene._cancel_press()
 	scene.rally.reset()
-	scene._sync_visuals(0.0)
-	_expect(scene.hud.tap_button.text == "TAP TO SERVE", "main button teaches ordinary taps by default")
-	_touch(Vector2(200, 775), true)
+	scene.rally.tap()
+	scene.rally.advance(0.72 + 0.92 + 1.12 * 0.2)
+	_touch(Vector2(24, 40), true)
 	await process_frame
-	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and not scene.rally.charging, "normal pad serves on finger down without holding or releasing")
-	scene.rally.advance(0.8)
-	_expect(is_equal_approx(scene.rally.shot_speed, 1.0) and not scene.rally.charging, "holding the normal pad never creates a charged shot")
-	_touch(Vector2(210, 480), false)
+	_expect(scene.rally.charging and scene.rally.returns == 0, "short tap does not hit on down or compete with a potential hold")
+	scene._press_started_msec = Time.get_ticks_msec() - 50
+	_touch(Vector2(24, 40), false)
 	await process_frame
-	_expect(scene.rally.returns == 0 and is_zero_approx(scene.rally.swing_buffer), "normal release cannot arm a second shot")
+	_expect(scene.rally.swing_buffer > 0.0 and not scene.rally.charging, "short release keeps normal early-tap assistance")
+	scene.rally.advance(0.35)
+	_expect(scene.rally.returns == 1 and is_equal_approx(scene.rally.shot_speed, 1.0), "ordinary early tap returns once at normal speed")
+	_touch(Vector2(24, 40), false)
+	await process_frame
+	_expect(scene.rally.returns == 1 and not scene.rally.has_queued_shot(), "duplicate release cannot add a second shot")
 
+	# Begin holding far outside contact, pass through the normal tap window,
+	# and release later within assisted racket reach: only the release strikes.
 	scene._cancel_press()
 	scene.rally.reset()
 	scene.rally.tap()
-	scene.rally.advance(0.72 + 0.92 + 1.12 * 0.2)
-	scene._sync_visuals(0.0)
-	_expect(scene.rally.can_tap() and not scene.rally.can_return(), "normal input cue allows an easier early tap after the bounce")
-	_expect(scene.hud.tap_button.text == "TAP TO RETURN", "main button offers normal return before exact contact")
-	_touch(Vector2(200, 775), true)
+	_touch(Vector2(216, 840), true)
 	await process_frame
-	_expect(scene.rally.swing_buffer > 0.0 and not scene.rally.charging, "slightly early normal press queues a shot without charging")
-	_touch(Vector2(200, 775), false)
+	_expect(not scene.rally.can_power_return() and scene.rally.charging, "hold may begin before the ball is in range")
+	scene.rally.advance(0.72 + 0.92 + 1.12 * 0.65 - scene.rally.phase_time)
+	_expect(scene.rally.returns == 0 and scene.rally.can_power_return(), "holding through contact never fires a normal shot")
+	scene._press_started_msec -= 750
+	_touch(Vector2(24, 40), false)
 	await process_frame
-	scene.rally.advance(0.35)
-	_expect(scene.rally.returns == 1 and is_equal_approx(scene.rally.shot_speed, 1.0), "ordinary early tap returns at normal speed when ball reaches racket")
+	_expect(scene.rally.returns == 1 and is_equal_approx(scene.rally.shot_speed, WallRally.MAX_SHOT_SPEED), "hold release alone judges contact and makes one strong return")
+	_touch(Vector2(24, 40), false)
+	await process_frame
+	_expect(scene.rally.returns == 1 and not scene.rally.has_queued_shot(), "strong release cannot also queue a normal shot")
 	scene._cancel_press()
 	scene.rally.reset()
-	scene._sync_visuals(0.0)
 
 
 func _check_scene_charge_controls(scene) -> void:
@@ -397,7 +390,7 @@ func _check_scene_charge_controls(scene) -> void:
 	await process_frame
 	scene.rally.advance(0.4)
 	scene._sync_visuals(0.0)
-	_expect(scene.rally.charging and scene.hud._progress.value > 0.5, "held power is visible on the HUD meter")
+	_expect(scene.rally.charging and scene.hud._progress.value > 0.5, "holding anywhere shows power on the HUD meter")
 	_touch(Vector2(210, 480), false, true)
 	await process_frame
 	_expect(not scene.rally.charging and scene.rally.phase == WallRally.Phase.READY, "canceled touch clears a held shot without firing")
@@ -429,7 +422,6 @@ func _check_scene_charge_controls(scene) -> void:
 	scene._cancel_press()
 	scene.rally.reset()
 	scene._touch_until = 0
-	scene.hud._last_touch_msec = -1000
 	var down := InputEventMouseButton.new()
 	down.position = root.get_screen_transform() * Vector2(350, 775)
 	down.button_index = MOUSE_BUTTON_LEFT
@@ -448,17 +440,16 @@ func _check_scene_charge_controls(scene) -> void:
 	scene.rally.reset()
 	var power_key := InputEventKey.new()
 	power_key.physical_keycode = KEY_SPACE
-	power_key.shift_pressed = true
 	power_key.pressed = true
 	Input.parse_input_event(power_key)
 	await process_frame
-	_expect(scene.rally.charging and scene.rally.phase == WallRally.Phase.READY, "Shift Space explicitly opts into a charged shot")
+	_expect(scene.rally.charging and scene.rally.phase == WallRally.Phase.READY, "holding Space charges without a separate key or modifier")
 	scene._press_started_msec -= 750
 	var release_key := power_key.duplicate() as InputEventKey
 	release_key.pressed = false
 	Input.parse_input_event(release_key)
 	await process_frame
-	_expect(is_equal_approx(scene.rally.shot_speed, WallRally.MAX_SHOT_SPEED), "optional keyboard hold releases a fast shot")
+	_expect(is_equal_approx(scene.rally.shot_speed, WallRally.MAX_SHOT_SPEED), "keyboard hold releases a fast shot")
 
 
 func _check_apex_destination() -> void:

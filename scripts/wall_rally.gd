@@ -19,6 +19,7 @@ const BOUNCE_APEX := 2.65
 const NORMAL_TAP_BUFFER := 0.35
 const WINDOW_OPEN := 0.16
 const WINDOW_CLOSE := 0.76
+const MIN_POWER_HOLD := 0.2
 const MAX_CHARGE_TIME := 0.75
 const MAX_SHOT_SPEED := 1.6
 
@@ -163,7 +164,7 @@ func cancel_charge() -> void:
 
 
 func tap() -> void:
-	# Normal shots fire on press; an early tap waits briefly for racket contact.
+	# An early normal tap waits briefly for racket contact.
 	if not charging:
 		_strike(0.0, NORMAL_TAP_BUFFER)
 

@@ -12,7 +12,6 @@ var _active_touch := -1
 var _press_source: StringName = &""
 var _press_id := -1
 var _press_started_msec := 0
-var _power_press := false
 var _last_returns := 0
 var _last_wall_hits := 0
 var _saved_best := 0
@@ -32,8 +31,6 @@ func _ready() -> void:
 	_saved_best = rally.best
 	rally.dominant_hand = dominant_hand
 	rally.reset()
-	hud.press_started.connect(_begin_press)
-	hud.pause_pressed.connect(_toggle_pause)
 	_sync_visuals(0.0)
 
 
@@ -65,7 +62,7 @@ func _sync_visuals(delta: float) -> void:
 	hud.sync_state(rally, paused)
 
 
-func _begin_press(source: StringName, id: int, power: bool = false) -> void:
+func _begin_press(source: StringName, id: int) -> void:
 	if paused:
 		paused = false
 		_cancel_press()
@@ -75,11 +72,8 @@ func _begin_press(source: StringName, id: int, power: bool = false) -> void:
 	_press_source = source
 	_press_id = id
 	_press_started_msec = Time.get_ticks_msec()
-	_power_press = power
-	if power:
-		rally.press()
-	else:
-		_tap()
+	# One gesture owns both actions. Never hit on down: it may become a hold.
+	rally.press()
 
 
 func _finish_press(source: StringName, id: int) -> void:
@@ -88,11 +82,15 @@ func _finish_press(source: StringName, id: int) -> void:
 	var held := maxf(0.0, float(Time.get_ticks_msec() - _press_started_msec) / 1000.0)
 	_press_source = &""
 	_press_id = -1
-	if not _power_press:
-		return
-	_power_press = false
 	var starting := rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED
-	rally.release(held)
+	if held < WallRally.MIN_POWER_HOLD:
+		# A canceled/missed hold must not turn into a tap that restarts play.
+		var valid := rally.charging
+		rally.cancel_charge()
+		if valid:
+			rally.tap()
+	else:
+		rally.release(held)
 	if starting and rally.phase == WallRally.Phase.OUTBOUND:
 		_reset_round_tracking()
 
@@ -101,7 +99,6 @@ func _cancel_press() -> void:
 	_press_source = &""
 	_press_id = -1
 	_press_started_msec = 0
-	_power_press = false
 	rally.cancel_charge()
 
 
@@ -112,7 +109,7 @@ func _reset_round_tracking() -> void:
 
 
 func _tap() -> void:
-	# Normal input and the diagnostic auto-rally share the instant tap action.
+	# Diagnostic auto-rally uses the model's normal tap action.
 	var starting := rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED
 	rally.tap()
 	if starting and rally.phase == WallRally.Phase.OUTBOUND:
@@ -127,7 +124,7 @@ func _toggle_pause() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	# A release belongs to its original press even after dragging off the pad.
+	# The whole viewport accepts a gesture; release follows its original owner.
 	if event is InputEventScreenTouch:
 		_touch_until = Time.get_ticks_msec() + 600
 		if event.canceled:
@@ -172,7 +169,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		var key: int = event.physical_keycode if event.physical_keycode != 0 else event.keycode
 		match key:
 			KEY_SPACE, KEY_ENTER:
-				_begin_press(&"key", int(key), event.shift_pressed)
+				_begin_press(&"key", int(key))
 			KEY_P, KEY_ESCAPE:
 				_toggle_pause()
 			KEY_R:
@@ -187,8 +184,6 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		_cancel_press()
 		_active_touch = -1
-		if is_instance_valid(hud):
-			hud.reset_touch()
 		if rally.phase != WallRally.Phase.READY and rally.phase != WallRally.Phase.MISSED:
 			paused = true
 		_save_best()
