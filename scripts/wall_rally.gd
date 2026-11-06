@@ -243,11 +243,8 @@ func _launch(power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	_pending_charge = 0.0
 	_pending_power = false
 	_pending_aim = Vector2.ZERO
-	var wall_x := clampf(ball_pos.x + sin(float(returns + 1) * 1.7) * 1.8, 2.4, WIDTH - 2.4)
-	var wall_height := 3.4
-	if shot_aim != Vector2.ZERO:
-		wall_x = clampf(ball_pos.x + shot_aim.x * SWIPE_LATERAL_REACH, 2.0, WIDTH - 2.0)
-		wall_height -= shot_aim.y * SWIPE_HEIGHT_REACH
+	var wall_x := clampf(ball_pos.x + shot_aim.x * SWIPE_LATERAL_REACH, 2.0, WIDTH - 2.0)
+	var wall_height := 3.4 - shot_aim.y * SWIPE_HEIGHT_REACH
 	_segment(Phase.OUTBOUND, Vector3(wall_x, wall_height, 0.2), 0.72 * pace() / shot_speed, 0.55)
 
 
@@ -263,11 +260,9 @@ func _finish_segment() -> void:
 	match phase:
 		Phase.OUTBOUND:
 			wall_hits += 1
-			target_x = clampf(WIDTH * 0.5 + sin(float(wall_hits) * 1.37) * 3.1, 2.0, WIDTH - 2.0)
-			if shot_aim != Vector2.ZERO:
-				# Reflect the forward component at the wall; keep lateral direction.
-				var slope := (ball_pos.x - _from.x) / maxf(_from.z - ball_pos.z, 0.1)
-				target_x = clampf(ball_pos.x + slope * (BOUNCE_Z - ball_pos.z), 2.0, WIDTH - 2.0)
+			# Reflect the forward component at the wall; keep lateral direction.
+			var slope := (ball_pos.x - _from.x) / maxf(_from.z - ball_pos.z, 0.1)
+			target_x = clampf(ball_pos.x + slope * (BOUNCE_Z - ball_pos.z), 2.0, WIDTH - 2.0)
 			receive_apex = trajectory_apex(Vector3(target_x, 0.0, BOUNCE_Z), Vector3(target_x, 0.0, LENGTH), BOUNCE_APEX)
 			_segment(Phase.RETURNING, Vector3(target_x, 0.0, BOUNCE_Z), 0.92 * pace() / shot_speed, 0.8)
 			last_feedback = "Let it bounce"

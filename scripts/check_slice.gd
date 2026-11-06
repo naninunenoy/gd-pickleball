@@ -77,7 +77,11 @@ func _run() -> void:
 	rally.reset()
 	rally.tap()
 	for hit in range(50):
+		var lane := rally.ball_pos.x
+		rally.advance(0.15)
+		_expect(is_equal_approx(rally.ball_pos.x, lane), "unswiped shot stays straight regardless of return count")
 		_until_return(rally)
+		_expect(is_equal_approx(rally.ball_pos.x, lane), "unswiped wall rebound returns along the same lane")
 		_expect(rally.can_return(), "reachable contact window at return %d" % hit)
 		_expect(rally.ball_pos.x >= 2.0 and rally.ball_pos.x <= WallRally.WIDTH - 2.0, "rebound stays within lane")
 		rally.tap()
@@ -251,7 +255,7 @@ func _check_swipe_trajectories() -> void:
 	_expect(power.returns == 1 and power.shot_aim == Vector2.RIGHT and is_equal_approx(power.shot_speed, WallRally.MAX_SHOT_SPEED), "early strong release preserves direction and speed together")
 	power.advance(10.0)
 	power.tap()
-	_expect(power.shot_aim == Vector2.ZERO, "retry without swiping restores the original shot pattern")
+	_expect(power.shot_aim == Vector2.ZERO, "retry without swiping returns to straight shots")
 	power.press()
 	power.release(0.75, Vector2.LEFT)
 	power.cancel_charge()
@@ -300,7 +304,7 @@ func _check_scene_swipes(scene) -> void:
 	_touch(start - Vector2(100, 0), false)
 	await process_frame
 	_expect(scene.rally.shot_aim == Vector2.LEFT, "release position aims even without an intermediate drag event")
-	# Mouse drag uses the same aiming path; keyboard keeps automatic direction.
+	# Mouse drag uses the same aiming path; keyboard shots stay straight.
 	scene.rally.reset()
 	scene._touch_until = 0
 	var mouse := InputEventMouseButton.new()
