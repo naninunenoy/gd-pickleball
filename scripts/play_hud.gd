@@ -127,7 +127,7 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 		_hint.text = "Try releasing a little earlier."
 	elif ready:
 		_message.text = "Your moment."
-		_hint.text = "Tap anywhere now. No hold needed."
+		_hint.text = "Tap now, even as the ball falls." if rally.bounce_progress() >= 0.5 else "Tap anywhere now. No hold needed."
 	elif rally.phase == WallRally.Phase.OUTBOUND:
 		_message.text = rally.last_feedback
 		_hint.text = "Tap anywhere. Hold for optional power."

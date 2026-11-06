@@ -91,6 +91,7 @@ func _run() -> void:
 	_check_handed_contact()
 	_check_charged_shots()
 	_check_power_release_assist()
+	_check_descending_contacts()
 	_check_swipe_trajectories()
 
 	# Exercise the real scene and input dispatch, including GUI consumption.
@@ -168,6 +169,7 @@ func _run() -> void:
 	await process_frame
 	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and is_equal_approx(scene.rally.shot_speed, 1.0), "short Space release fires one normal shot")
 	await _check_simple_taps(scene)
+	await _check_descending_touch(scene)
 	await _check_scene_charge_controls(scene)
 	await _check_scene_swipes(scene)
 	scene.free()
@@ -422,7 +424,8 @@ func _check_power_release_assist() -> void:
 		for speed in [1.0, WallRally.MAX_SHOT_SPEED]:
 			for progress in [0.35, 0.65]:
 				var rally := _release_fixture(hand, speed, progress)
-				_expect(not rally.can_return() and rally.can_power_return(), "POWER accepts release before and after the former tiny contact window")
+				_expect(rally.can_power_return(), "POWER accepts release before and after the apex")
+				_expect(rally.can_return() == (progress >= 0.5), "normal taps also reach descending balls without changing rising contact")
 				var contact := rally.ball_pos
 				rally.release()
 				_expect(rally.returns == 1 and is_equal_approx(rally.shot_speed, WallRally.MAX_SHOT_SPEED), "early/late release returns immediately with held power for either hand and speed")
@@ -469,6 +472,70 @@ func _check_power_release_assist() -> void:
 	_expect(normal.returns == 0 and not normal._pending_power, "switching to a normal tap does not inherit POWER reach")
 	normal.advance(0.25)
 	_expect(normal.returns == 1 and is_equal_approx(normal.shot_speed, 1.0), "normal tap keeps its original speed and contact behavior")
+
+
+func _check_descending_contacts() -> void:
+	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+		for speed in [1.0, WallRally.MAX_SHOT_SPEED]:
+			for progress in [0.55, 0.65, 0.75, 0.8]:
+				for strong in [false, true]:
+					var rally := _release_fixture(hand, speed, progress)
+					if not strong:
+						rally.cancel_charge()
+					_expect(rally.can_return() and rally.can_power_return() and rally.can_tap(), "falling ball is available to normal and strong shots for either hand and speed")
+					var contact := rally.ball_pos
+					if strong:
+						rally.release(0.75, Vector2.LEFT)
+					else:
+						rally.tap(Vector2.LEFT)
+					_expect(rally.returns == 1 and rally.phase == WallRally.Phase.OUTBOUND and not rally.has_queued_shot(), "descending input makes exactly one immediate return")
+					_expect(rally.ball_pos == contact and rally.last_contact_pos == contact and rally.shot_aim == Vector2.LEFT, "descending strike keeps the current ball position and swipe direction")
+					_expect(is_equal_approx(rally.shot_speed, WallRally.MAX_SHOT_SPEED if strong else 1.0), "descending normal taps do not require power")
+		for progress in [0.65, 0.8]:
+			var wrong_side := _release_fixture(hand, 1.0, progress)
+			wrong_side.player_pos.x = wrong_side.ball_pos.x
+			_expect(not wrong_side.can_return() and not wrong_side.can_power_return(), "descending reach still rejects body-centered contact")
+		for strong in [false, true]:
+			var late := _release_fixture(hand, 1.0, 0.9)
+			if strong:
+				late.release()
+			else:
+				late.cancel_charge()
+				late.tap()
+			_expect(late.returns == 0 and not late.has_queued_shot(), "ball beyond arm reach cannot be returned")
+			late.advance(0.5)
+			_expect(late.phase == WallRally.Phase.MISSED and late.returns == 0, "descending assistance still ends at the second bounce")
+
+
+func _check_descending_touch(scene) -> void:
+	# A real short gesture begins after the apex and lifts 120 ms later.
+	# The release remains a normal shot, even with swipe input while falling.
+	scene.set_process(false)
+	for progress in [0.6, 0.7]:
+		scene.paused = false
+		scene._cancel_press()
+		scene.rally.reset()
+		scene.rally.tap()
+		scene.rally.advance(0.72 + 0.92 + 1.12 * progress)
+		scene._sync_visuals(0.0)
+		_expect(scene.hud._message.text == "Your moment.", "HUD keeps offering normal taps after the apex")
+		_touch(Vector2(216, 480), true)
+		await process_frame
+		scene.rally.advance(0.1)
+		_expect(scene.rally.returns == 0 and scene.rally.charging, "descending finger-down does not fire before tap/hold classification")
+		scene._press_started_msec = Time.get_ticks_msec() - 120
+		var contact: Vector3 = scene.rally.ball_pos
+		_touch(Vector2(116, 480), false)
+		await process_frame
+		scene._sync_visuals(0.0)
+		_expect(scene.rally.returns == 1 and is_equal_approx(scene.rally.shot_speed, 1.0) and scene.rally.shot_aim == Vector2.LEFT, "short descending touch returns normally and preserves swipe aim")
+		_expect(scene.player.paddle_contact_position().distance_to(contact) < 0.001 and scene.ball._impact.visible, "rendered racket and impact extend to the falling ball")
+		_touch(Vector2(116, 480), false)
+		await process_frame
+		_expect(scene.rally.returns == 1 and not scene.rally.has_queued_shot(), "descending tap release cannot add another return")
+	scene._cancel_press()
+	scene.rally.reset()
+	scene.set_process(true)
 
 
 func _check_simple_taps(scene) -> void:

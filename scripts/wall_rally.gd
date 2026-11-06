@@ -13,12 +13,13 @@ const PADDLE_SIDE := 1.15
 const PADDLE_FORWARD := 1.1
 const CONTACT_RADIUS := 0.42
 const POWER_CONTACT_RADIUS := 1.8
+const DESCENDING_CONTACT_REACH := 3.0
 const MOVE_SPEED := 16.0
 const BOUNCE_Z := 13.6
 const BOUNCE_APEX := 2.65
 const NORMAL_TAP_BUFFER := 0.35
 const WINDOW_OPEN := 0.16
-const WINDOW_CLOSE := 0.76
+const WINDOW_CLOSE := 0.84
 const MIN_POWER_HOLD := 0.2
 const MAX_CHARGE_TIME := 0.75
 const MAX_SHOT_SPEED := 1.6
@@ -119,15 +120,22 @@ func bounce_progress() -> float:
 
 
 func can_return() -> bool:
-	var progress := bounce_progress()
-	return phase == Phase.BOUNCED and progress >= WINDOW_OPEN and progress <= WINDOW_CLOSE and paddle_position().distance_to(ball_pos) <= CONTACT_RADIUS
+	return _can_reach(CONTACT_RADIUS)
 
 
 func can_power_return() -> bool:
+	return _can_reach(POWER_CONTACT_RADIUS)
+
+
+func _can_reach(rising_reach: float) -> bool:
+	if phase != Phase.BOUNCED:
+		return false
 	var progress := bounce_progress()
 	var paddle := paddle_position()
-	# Allow fore/aft racket reach while keeping the ball on the striking-hand side.
-	return phase == Phase.BOUNCED and progress >= WINDOW_OPEN and progress <= WINDOW_CLOSE and absf(paddle.x - ball_pos.x) <= CONTACT_RADIUS and paddle.distance_to(ball_pos) <= POWER_CONTACT_RADIUS
+	# The prepared apex pose is not the arm's full reach. Both shot types can
+	# extend to a falling ball, keeping contact on the dominant-hand side.
+	var reach := DESCENDING_CONTACT_REACH if progress >= 0.5 else rising_reach
+	return progress >= WINDOW_OPEN and progress <= WINDOW_CLOSE and absf(paddle.x - ball_pos.x) <= CONTACT_RADIUS and paddle.distance_to(ball_pos) <= reach
 
 
 func has_queued_shot() -> bool:

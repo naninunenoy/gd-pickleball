@@ -7,10 +7,11 @@ One player, one practice wall. Play upright on a phone and try to beat your long
 - The entire screen accepts input, including the score, instructions and build footer. There are no buttons.
 - A short tap (under 0.2 seconds) serves or returns at normal speed when you lift your finger. You do not need to hold for normal play.
 - Let the wall's return bounce once. A slightly early normal tap waits up to 0.35 seconds for the ball to reach the racket.
+- You can tap after the highest point while the ball is falling and still within arm/racket reach. Normal taps and strong shots share this descending reach; you do not need power to hit a falling ball.
 - Hold for at least 0.2 seconds for optional power, then release when the ball is near your racket after one bounce. A longer hold gives a faster shot, capped at 0.75 seconds and 1.6 times normal speed. Its wall return keeps that speed.
 - Swipe before lifting your finger to aim a normal or strong shot. Left/right sends the ball left/right; up/down sends it higher/lower against the wall. Diagonal swipes combine both. An arrow follows your swipe. Small finger movements are ignored, and a still tap sends the ball straight toward the wall.
 - You can start holding while the ball is outside racket range. Holding never hits automatically; release judges the strong shot. One gesture produces either a normal shot or a strong shot, never both.
-- Power allows extra fore/aft racket reach before or after the exact peak. An early strong release keeps both its direction and speed until this ball reaches the racket. The screen shows "Waiting for the ball." A release after a missed second bounce cannot restart the rally; a fresh press is required.
+- Power allows extra fore/aft racket reach while the ball rises. During descent, ordinary taps and strong shots have the same extended reach. An early strong release keeps both its direction and speed until this ball reaches the racket. The screen shows "Waiting for the ball." A release after a missed second bounce cannot restart the rally; a fresh press is required.
 - Your player anticipates the highest point after the first bounce, moves there, and waits with the right-hand racket beside the rebound.
 - Every successful return counts once. Serving does not count. A short ring and spark burst marks a successful hit.
 - A second ground bounce ends the rally. Tap to retry; your personal best stays saved.
