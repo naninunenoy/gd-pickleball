@@ -94,6 +94,7 @@ func _run() -> void:
 	_check_descending_contacts()
 	_check_swipe_trajectories()
 	_check_pair_rally()
+	_check_pair_recovery()
 
 	# Exercise the real scene and input dispatch, including GUI consumption.
 	var scene = load("res://scenes/main.tscn").instantiate()
@@ -225,7 +226,7 @@ func _check_pair_rally() -> void:
 		_expect(is_equal_approx(duo.ball_pos.x, lane), "pair serve without swiping stays straight for either hand")
 		duo.reset()
 		duo.tap(Vector2.RIGHT)
-		_expect(duo.active_player == 1 and duo.last_hitter == 0 and duo.returns == 0, "rightward serve selects the closer second player without scoring")
+		_expect(duo.active_player == 1 and duo.last_hitter == 0 and duo.returns == 0, "rightward serve selects the right-side player without scoring")
 		var predicted := duo.receive_apex
 		duo.press()
 		duo.advance(0.8)
@@ -233,7 +234,7 @@ func _check_pair_rally() -> void:
 		_until_return(duo)
 		var contact := duo.ball_pos
 		duo.release(0.75, Vector2.LEFT)
-		_expect(duo.returns == 1 and duo.last_hitter == 1 and duo.active_player == 0, "leftward return selects the closer first player")
+		_expect(duo.returns == 1 and duo.last_hitter == 1 and duo.active_player == 0, "leftward return selects the left-side player")
 		_expect(duo.last_contact_pos == contact and duo.ball_pos == contact, "handoff preserves the previous hitter's physical contact")
 		for hit in range(40):
 			_until_return(duo)
@@ -259,6 +260,56 @@ func _check_pair_rally() -> void:
 	straight.advance(0.72 + 0.92 + 1.12 * 0.75)
 	straight.tap()
 	_expect(straight.returns == 1 and straight.last_hitter == 1 and straight.active_player == 1, "selected partner can return a falling ball and remain the receiver on a straight shot")
+
+
+func _check_pair_recovery() -> void:
+	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+		var pair := WallRally.new()
+		pair.dominant_hand = hand
+		pair.set_player_count(2)
+		pair.tap(Vector2.RIGHT)
+		for index in range(2):
+			_expect(pair.movement_target(index) == pair.home_position(index), "both players recover home while the shot is outbound")
+		pair.advance(0.3)
+		_expect(pair.wall_hits == 0 and pair.player_position(1).is_equal_approx(pair.home_position(1)), "receiver cannot anticipate and run to the future rebound before wall contact")
+		pair.advance(0.43)
+		_expect(pair.phase == WallRally.Phase.RETURNING and pair.active_player == 1 and pair.movement_target(1) != pair.home_position(1), "assigned receiver approaches only after the wall rebound")
+		_until_return(pair)
+		# Reproduce a hitter already standing in the partner's half. Proximity
+		# must not let that athlete keep claiming this territory's next ball.
+		pair._player_positions[0] = pair.player_position(1)
+		pair._paddle_heights[0] = pair.paddle_height
+		pair.active_player = 0
+		var contact := pair.ball_pos
+		var before := pair.player_position(0).distance_to(pair.home_position(0))
+		pair.tap()
+		_expect(pair.last_hitter == 0 and pair.active_player == 1 and pair.last_contact_pos == contact, "out-of-position hitter yields the partner's territory even when closest")
+		pair.press()
+		pair.advance(0.2)
+		_expect(pair.player_position(0).distance_to(pair.home_position(0)) < before, "hitter actually moves toward their own home after contact")
+		_expect(pair.active_player == 1 and pair.charging, "recovery does not reassign a held gesture")
+		pair.advance(0.5)
+		_expect(pair.phase == WallRally.Phase.OUTBOUND and pair.player_position(0).is_equal_approx(pair.home_position(0)) and pair.player_position(1).is_equal_approx(pair.home_position(1)), "both players return home before the wall instead of camping at the next strike point")
+		pair.cancel_charge()
+		_until_return(pair)
+		pair.tap(Vector2.LEFT)
+		_expect(pair.active_player == 0, "partner-side stroke gives the next ball back to that side's owner")
+		# Central strokes are shared; ordinary strokes into the same half remain
+		# the responsibility of that half's player.
+		pair.reset()
+		pair.tap(Vector2(0.4, -1.0))
+		_expect(absf(pair.receive_apex.x - 6.0) < 0.2 and pair.active_player == 1, "middle return is yielded to the partner")
+		_until_return(pair)
+		pair.tap()
+		_expect(pair.last_hitter == 1 and pair.active_player == 0, "consecutive middle balls are shared without a counter-based flight pattern")
+		for hit in range(24):
+			_until_return(pair)
+			var left_racket := pair.player_position(0).x + pair.hand_side() * WallRally.PADDLE_SIDE
+			var right_racket := pair.player_position(1).x + pair.hand_side() * WallRally.PADDLE_SIDE
+			_expect(left_racket <= 6.5 and right_racket >= 5.5, "players remain in their own halves with limited middle coverage")
+			pair.press()
+			pair.release(0.75, Vector2.RIGHT if hit % 2 == 0 else Vector2.LEFT)
+		_expect(pair.returns == 25, "territory recovery preserves fast rallies for either striking hand")
 
 
 func _check_pair_scene() -> void:

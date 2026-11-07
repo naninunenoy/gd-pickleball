@@ -25,6 +25,8 @@ const MAX_CHARGE_TIME := 0.75
 const MAX_SHOT_SPEED := 1.6
 const SWIPE_LATERAL_REACH := 4.5
 const SWIPE_HEIGHT_REACH := 1.4
+const TERRITORY_OVERLAP := 0.5
+const CENTER_SHARE_WIDTH := 0.2
 
 var phase: Phase = Phase.READY
 var dominant_hand: Hand = Hand.RIGHT
@@ -126,10 +128,15 @@ func movement_target(index: int = -1) -> Vector3:
 	if player_count == 2:
 		if phase == Phase.READY or phase == Phase.MISSED:
 			return _player_positions[selected]
-		if selected != active_player:
-			# Leave the receiving lane open, with a separate waiting depth.
-			return Vector3(_home_x(selected), 0.0, PLAYER_Z + 2.6)
-		return _feet_for_apex(receive_apex)
+		if phase == Phase.OUTBOUND or selected != active_player:
+			# Recover first. Do not chase a future rebound before it hits the wall.
+			return home_position(selected)
+		var goal := _feet_for_apex(receive_apex)
+		var racket_x := goal.x + hand_side() * PADDLE_SIDE
+		var left := 2.0 if selected == 0 else WIDTH * 0.5 - TERRITORY_OVERLAP
+		var right := WIDTH * 0.5 + TERRITORY_OVERLAP if selected == 0 else WIDTH - 2.0
+		goal.x = clampf(racket_x, left, right) - hand_side() * PADDLE_SIDE
+		return goal
 	# Keep the prepared stance until the next wall rebound supplies a new apex.
 	if wall_hits > 0:
 		return Vector3(receive_apex.x - hand_side() * PADDLE_SIDE, 0.0, receive_apex.z + PADDLE_FORWARD)
@@ -155,6 +162,10 @@ func _home_x(index: int) -> float:
 	return (3.0 if index == 0 else 9.0) - hand_side() * PADDLE_SIDE
 
 
+func home_position(index: int) -> Vector3:
+	return Vector3(_home_x(index), 0.0, PLAYER_Z)
+
+
 func _predict_rebound() -> void:
 	var slope := (_to.x - _from.x) / maxf(_from.z - _to.z, 0.1)
 	target_x = clampf(_to.x + slope * (BOUNCE_Z - _to.z), 2.0, WIDTH - 2.0)
@@ -162,13 +173,13 @@ func _predict_rebound() -> void:
 
 
 func _select_receiver() -> void:
-	var goal := _feet_for_apex(receive_apex)
-	var best_time := _player_positions[active_player].distance_to(goal) / MOVE_SPEED
-	for index in range(player_count):
-		var arrival := _player_positions[index].distance_to(goal) / MOVE_SPEED
-		if arrival < best_time - 0.0001:
-			active_player = index
-			best_time = arrival
+	var from_center := receive_apex.x - WIDTH * 0.5
+	# Ownership follows the ball's side, not whoever is currently camping there.
+	# Share ambiguous middle balls with the partner without forcing wide turns.
+	if absf(from_center) <= CENTER_SHARE_WIDTH:
+		active_player = 1 - last_hitter
+	else:
+		active_player = 0 if from_center < 0.0 else 1
 
 
 func pace() -> float:
@@ -316,7 +327,7 @@ func _launch(power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	var wall_height := 3.4 - shot_aim.y * SWIPE_HEIGHT_REACH
 	_segment(Phase.OUTBOUND, Vector3(wall_x, wall_height, 0.2), 0.72 * pace() / shot_speed, 0.55)
 	if player_count == 2:
-		# Decide once per successful shot, early enough to charge the next one.
+		# Assign input once per shot; both players recover home until wall impact.
 		_predict_rebound()
 		_select_receiver()
 
