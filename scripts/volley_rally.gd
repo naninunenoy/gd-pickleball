@@ -1,16 +1,21 @@
 class_name VolleyRally
 extends WallRally
 
-## Straight, tap-only volleys against one automatic opponent. No ground bounce.
+## Aimed normal/charged volleys against an automatic opponent. No ground bounce.
 const NET_Z := 11.5
 const NET_HEIGHT := 2.85
 const VOLLEY_HEIGHT := 3.2
 const FLIGHT_TIME := 1.4
 const VOLLEY_REACH := 2.8
 const INCOMING_END_Z := 19.4
+const LATE_RELEASE_GRACE := MIN_POWER_HOLD
+const AIM_LATERAL_REACH := 4.0
+const HIGH_TARGET := 4.6
+const LOW_TARGET := 3.0
 
 var opponent_returns := 0
 var _return_queued := false
+var _opponent_target := Vector3(6.0, VOLLEY_HEIGHT, 4.7)
 
 
 func reset() -> void:
@@ -24,6 +29,7 @@ func reset() -> void:
 	receive_apex = paddle_position(0)
 	target_x = 6.0
 	opponent_returns = 0
+	_opponent_target = paddle_position(1)
 
 
 func set_player_count(_count: int) -> void:
@@ -38,11 +44,14 @@ func paddle_position(index: int = -1) -> Vector3:
 
 
 func movement_target(index: int = -1) -> Vector3:
-	return _player_positions[0 if index < 0 else index]
+	if index == 1:
+		var racket_x := _opponent_target.x if phase == Phase.OUTBOUND else 6.0
+		return Vector3(racket_x + hand_side() * PADDLE_SIDE, 0.0, 3.6)
+	return _player_positions[0]
 
 
 func pace() -> float:
-	return 1.0 # Keep the first volley drill at a fixed, predictable rhythm.
+	return 1.0 # Incoming volleys keep a fixed, predictable rhythm.
 
 
 func can_return() -> bool:
@@ -71,18 +80,32 @@ func bounce_progress() -> float:
 
 
 func press() -> void:
-	tap()
+	if charging:
+		return
+	cancel_charge()
+	super.press()
 
 
-func release(_held_seconds: float = -1.0, _aim: Vector2 = Vector2.ZERO) -> void:
-	pass # A volley is decided on tap-down; holding and lifting never hit again.
+func release(held_seconds: float = -1.0, aim: Vector2 = Vector2.ZERO) -> void:
+	if not charging:
+		return
+	var power := charge_fraction() if held_seconds < 0.0 else clampf(held_seconds / MAX_CHARGE_TIME, 0.0, 1.0)
+	cancel_charge()
+	_request_shot(power, aim, true)
 
 
-func tap(_aim: Vector2 = Vector2.ZERO) -> void:
+func tap(aim: Vector2 = Vector2.ZERO) -> void:
+	if not charging:
+		_request_shot(0.0, aim)
+
+
+func _request_shot(power: float, aim: Vector2, hold_release: bool = false) -> void:
 	if phase == Phase.READY or phase == Phase.MISSED:
 		reset()
-		_launch()
-	elif phase == Phase.RETURNING:
+		_launch(power, aim)
+	elif phase == Phase.RETURNING or (phase == Phase.OUTBOUND and hold_release):
+		_pending_charge = power
+		_pending_aim = aim
 		if can_return():
 			_return_ball()
 		else:
@@ -90,27 +113,41 @@ func tap(_aim: Vector2 = Vector2.ZERO) -> void:
 			last_feedback = "Ready to volley"
 
 
-func _launch(_power: float = 0.0, _aim: Vector2 = Vector2.ZERO) -> void:
+func _launch(power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	cancel_charge()
 	active_player = 0
 	last_hitter = 0
 	last_contact_pos = ball_pos
 	contact_age = 0.0
-	shot_charge = 0.0
-	shot_speed = 1.0
-	shot_aim = Vector2.ZERO
+	shot_charge = clampf(power, 0.0, 1.0)
+	shot_speed = lerpf(1.0, MAX_SHOT_SPEED, shot_charge)
+	shot_aim = aim.normalized()
+	var height := lerpf(VOLLEY_HEIGHT, HIGH_TARGET, -shot_aim.y) if shot_aim.y < 0.0 else lerpf(VOLLEY_HEIGHT, LOW_TARGET, shot_aim.y)
+	_opponent_target = Vector3(clampf(ball_pos.x + shot_aim.x * AIM_LATERAL_REACH, 2.0, 10.0), height, paddle_position(1).z)
 	last_feedback = "To your opponent"
-	_segment(Phase.OUTBOUND, paddle_position(1), FLIGHT_TIME * pace(), 0.4)
+	_segment(Phase.OUTBOUND, _opponent_target, FLIGHT_TIME / shot_speed, 0.4)
 
 
 func advance(delta: float) -> void:
 	var remaining := maxf(delta, 0.0)
+	if phase == Phase.READY or phase == Phase.MISSED:
+		if charging:
+			charge_time = minf(MAX_CHARGE_TIME, charge_time + remaining)
+		return
 	while remaining > 0.000001 and phase != Phase.READY and phase != Phase.MISSED:
 		var step := minf(remaining, 1.0 / 120.0)
-		step = minf(step, maxf(_duration - phase_time, 0.000001))
+		# Give a late finger-down time to become a release, keeping the ball
+		# at its visible endpoint rather than letting it pass behind the camera.
+		var segment_end := _duration + LATE_RELEASE_GRACE if phase == Phase.RETURNING and charging else _duration
+		step = minf(step, maxf(segment_end - phase_time, 0.000001))
 		remaining -= step
 		phase_time += step
 		contact_age += step
+		if charging:
+			charge_time = minf(MAX_CHARGE_TIME, charge_time + step)
+		_player_positions[1] = _player_positions[1].move_toward(movement_target(1), MOVE_SPEED * step)
+		var height := _opponent_target.y if phase == Phase.OUTBOUND else VOLLEY_HEIGHT
+		_paddle_heights[1] = move_toward(_paddle_heights[1], height, 12.0 * step)
 		var progress := clampf(phase_time / _duration, 0.0, 1.0)
 		ball_pos = _from.lerp(_to, progress)
 		ball_pos.y += 4.0 * _apex * progress * (1.0 - progress)
@@ -124,8 +161,14 @@ func advance(delta: float) -> void:
 				last_contact_pos = ball_pos
 				contact_age = 0.0
 				last_feedback = "Opponent returns"
+				# The CPU softens the return so stronger player shots stay readable.
+				shot_charge = 0.0
+				shot_speed = 1.0
+				shot_aim = Vector2.ZERO
 				_segment(Phase.RETURNING, Vector3(6.0, VOLLEY_HEIGHT, INCOMING_END_Z), FLIGHT_TIME * pace(), 0.4)
 			else:
+				if charging and phase_time < segment_end - 0.000001:
+					continue
 				phase = Phase.MISSED
 				cancel_charge()
 				last_feedback = "The ball passed"

@@ -29,7 +29,8 @@ func sync_volley(rally: WallRally) -> void:
 		return
 	var side := rally.hand_side()
 	var resting := Vector3(PADDLE_REST.x * side, PADDLE_REST.y, PADDLE_REST.z)
-	var recovery := clampf(rally.contact_age / 0.24, 0.0, 1.0) if rally.last_hitter == 0 else 1.0
+	var recovery_time := lerpf(0.24, 0.17, rally.shot_charge)
+	var recovery := clampf(rally.contact_age / recovery_time, 0.0, 1.0) if rally.last_hitter == 0 else 1.0
 	var contact := camera.to_local(rally.last_contact_pos)
 	var swing := Vector3(0.0, -0.35, -1.4)
 	if contact.z < -0.1:

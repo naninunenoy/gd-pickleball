@@ -145,9 +145,6 @@ func _begin_press(source: StringName, id: int, position: Vector2 = Vector2.ZERO)
 	_press_origin = position
 	_swipe_direction = Vector2.ZERO
 	hud.clear_swipe()
-	if volley_mode:
-		_tap()
-		return
 	# One gesture owns both actions. Never hit on down: it may become a hold.
 	rally.press()
 
@@ -172,8 +169,6 @@ func _finish_press(source: StringName, id: int) -> void:
 	_press_id = -1
 	_swipe_direction = Vector2.ZERO
 	hud.clear_swipe()
-	if volley_mode:
-		return
 	var starting := rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED
 	if held < WallRally.MIN_POWER_HOLD:
 		# A canceled/missed hold must not turn into a tap that restarts play.
