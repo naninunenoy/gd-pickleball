@@ -1,8 +1,22 @@
 # Wall rally rules
 
-One or two athletes, one practice wall, controlled on the same phone. Play upright on a phone and try to beat your longest rally. All in-game text stays English.
+Choose wall practice or a 1v1 volley exchange, controlled on the same phone. Play upright on a phone and try to beat your longest rally. All in-game text stays English.
 
-## Full-screen taps and holds
+## Game selection
+
+The left header selector switches **WALL RALLY / VOLLEY RALLY** before play, after a miss, or while paused. Changing game restarts the rally and cancels pending input. Your game choice, wall player count and separate best records are saved. Both selectors disappear during play, leaving the whole screen available for shots.
+
+## 1v1 volley rally
+
+- You play on the near side of a net; one automatic opponent faces you from the far side.
+- Tap anywhere to start. Tap again as each return approaches your racket. Every shot stays straight and clears the net, without a ground bounce.
+- A tap hits on finger down. Holding, dragging and releasing do not charge, aim, repeat or add another shot.
+- A slightly early incoming tap waits up to 0.45 seconds for the ball to reach the racket. Taps while your shot is traveling to the opponent do not hit again.
+- The opponent volleys automatically from its own racket. Your successful returns count toward the volley record; the opening shot does not count.
+- If a return passes you, the rally ends. Tap to restart, or use the header selector to return to wall practice.
+- This mode has one player versus one automatic opponent. The wall practice player-count selector is hidden here.
+
+## Wall practice taps and holds
 
 - The entire screen accepts input, including the score, instructions and build footer. There are no shot or player-switch buttons during a rally.
 - A short tap (under 0.2 seconds) serves or returns at normal speed when you lift your finger. You do not need to hold for normal play.

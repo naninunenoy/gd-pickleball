@@ -1,16 +1,17 @@
-# Wall practice implementation
+# Pickleball practice implementation
 
 `docs/rules.md` is the player-facing source of truth. All in-game strings stay English and use the embedded Inter font.
 
 ## Architecture
 
 - `wall_rally.gd`: deterministic practice state and analytic ball trajectories, independent of display/input. READY -> OUTBOUND -> RETURNING -> BOUNCED -> OUTBOUND on a legal tap, or MISSED on a second ground bounce.
+- `volley_rally.gd`: separate tap-only, no-bounce 1v1 model with automatic far-side returns and straight trajectories.
 - `main.gd`: input, pause/focus lifecycle, local best persistence, auto-rally diagnostics, scene synchronization.
 - `athlete.gd`: automatically moving athletes with separate identities, selection rings and paddle swings.
 - `ball.gd`: bright ball, ground shadow, short trail and contact marker.
-- `court_3d.gd`: half court and solid wall; there is no net or opposing CPU.
-- `camera_rig.gd`: stable portrait camera showing the full wall, bounce zone and player.
-- `play_hud.gd`: rally/best counters, timing and gesture cues, build identifier; every control ignores pointer input.
+- `court_3d.gd`: shared floor with switchable practice wall or an open grid net and volley court markings.
+- `camera_rig.gd`: portrait camera with separate wall and volley compositions.
+- `play_hud.gd`: rally/best counters, timing and gesture cues, build identifier; playing labels ignore pointer input; idle game/count selectors accept input.
 - `check_slice.gd`: deterministic rules and full-scene input/lifecycle regression checks, including mode persistence and receiver handoff.
 
 Coordinates are feet, X across a 12-foot practice lane, Y up, Z away from the wall at Z=0. The wall returns the ball along the shot's course within the lane. An outbound arc hits the wall at height 3.4 by default (2.0–4.8 with vertical aiming), then returns to a ground bounce at Z=13.6. The next bounce would be at Z=23. Contact between 16% and 84% of that bounce arc sends the ball back only when the racket can reach it. Short taps hit on release, with a 0.35s early-tap buffer. Optional POWER releases retain their selected power until this ball reaches the assisted contact area or the shot is canceled by a second bounce, pause, or new input. Both buffers expire and are consumed by one return. Each return counts once; serving counts zero. Rally progression gradually shrinks flight times to a 72% floor, with optional held-shot speed applied separately. Integration uses small steps and preserves segment overshoot so slow frames do not skip entire input windows.
@@ -37,9 +38,19 @@ Both athletes target their own `home_position()` throughout OUTBOUND: racket lan
 
 The mode selector is available in READY, MISSED and pause, disappears while charging or playing, and does not launch a ball. Changing mode cancels controller ownership and queued shots, restarts READY, and saves `practice.players` alongside the shared `practice.best` in the existing config. Config writes preserve the highest stored best. `save_path` can isolate full-scene persistence checks from the real player profile.
 
+## 1v1 volleys
+
+`VolleyRally` extends the shared state/rendering interface while implementing its own integration, contact, input and reset behavior. Human index 0 stays at Z=19.4 and CPU index 1 at Z=3.6, outside the non-volley zone. Their opposite-facing rackets share X=6 at height 3.2, with the net at Z=11.5 and height 2.85. Every analytic flight arches above the net; no ground or wall bounce occurs. OUTBOUND reaches the CPU racket, records a CPU strike and begins RETURNING. The CPU returns automatically. A human tap within 2.1 feet of their prepared racket returns immediately; an early incoming tap has a 0.45-second buffer. The unreturned ball continues past the player to Z=20.5 and ends MISSED. Each successful human return counts once; serving and CPU returns do not score. The initial volley drill keeps a fixed pace, with shot power at 1.0 and aim at zero throughout the rally.
+
+In this game, `main.gd` calls the normal action on finger/mouse/key down, and ignores the matching release. Gesture ownership still suppresses extra fingers, keyboard repeats and synthetic mouse events. `charging` is always false, so dragging cannot draw an aim arrow or change the shot. The wall's release/charge/swipe rules remain separate.
+
+The opponent reuses the second athlete node but faces toward the player, with mirrored racket geometry and a CPU label. Strike follow-through and the ball's impact effect work for both OUTBOUND human strikes and RETURNING CPU strikes. The bounce marker is hidden. `Court3D` switches wall parts and practice markings off and enables a net plus volley markings; `CameraRig` applies the corresponding portrait framing.
+
+The left header selector changes game only in idle/missed/pause states. Wall player-count controls remain independent and are hidden in volley. `practice.game` stores the game choice, `practice.players` retains the wall count, and records use `practice.best` and `volley.best`. Game changes cancel all held/queued input, load the chosen game's best and reset READY. All full-scene checks use isolated config paths, so exercising selectors cannot change a developer's game preference or record.
+
 ## Input and lifecycle
 
-During a rally the whole viewport accepts one gesture, including the header and footer. There are no shot or player-switch controls. HUD labels have `MOUSE_FILTER_IGNORE`. The sole mode selector accepts input only in READY, MISSED or paused states and emits `player_count_requested`; touch and synthetic mouse cannot activate it twice. Touch, left mouse and Space/Enter all call `press()` on down without checking racket range or hitting. On release, `main.gd` uses wall-clock elapsed time: below `MIN_POWER_HOLD` (0.2s), cancel charging and call normal `tap()`; otherwise call `release(elapsed)`. The branches are exclusive. Normal taps retain their 0.35s early buffer and 0.42-foot ascending contact radius; descending taps use the shared arm/racket reach. `can_tap()` gives an early HUD cue.
+During a rally the whole viewport accepts one gesture, including the header and footer. There are no shot or player-switch controls. HUD labels have `MOUSE_FILTER_IGNORE`. The game selector and wall player-count selector accept input only in READY, MISSED or paused states and emit `volley_mode_requested` / `player_count_requested`; touch and synthetic mouse cannot activate it twice. In wall practice, touch, left mouse and Space/Enter call `press()` on down without checking racket range or hitting. On release, `main.gd` uses wall-clock elapsed time: below `MIN_POWER_HOLD` (0.2s), cancel charging and call normal `tap()`; otherwise call `release(elapsed)`. The branches are exclusive. Normal taps retain their 0.35s early buffer and 0.42-foot ascending contact radius; descending taps use the shared arm/racket reach. `can_tap()` gives an early HUD cue.
 
 Touch and mouse gestures record the initial viewport position and the owning pointer's current/release position. Movement under 14 reference pixels is ignored; otherwise the normalized displacement becomes the shot aim. Reference viewport coordinates make the deadzone scale consistently across phones. Keyboard-only shots pass zero aim. `PlayHud` draws a noninteractive arrow during an active swipe and clears it on release or cancellation. Secondary pointers cannot change aim.
 

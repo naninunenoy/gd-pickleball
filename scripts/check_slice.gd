@@ -95,19 +95,22 @@ func _run() -> void:
 	_check_swipe_trajectories()
 	_check_pair_rally()
 	_check_pair_recovery()
+	_check_volley_rally()
 
 	# Exercise the real scene and input dispatch, including GUI consumption.
 	var scene = load("res://scenes/main.tscn").instantiate()
+	var scene_path := "user://solo_check_%d.cfg" % Time.get_ticks_msec()
+	scene.save_path = scene_path
 	root.add_child(scene)
 	await process_frame
 	scene._saved_best = 1000000 # Do not alter a developer's saved record in checks.
 	_expect(scene.get_node("World").get_child_count() == 3, "world contains court, exactly one player and one ball")
 	_expect(scene.rally.phase == WallRally.Phase.READY, "scene waits for tap")
 	for control in scene.hud.find_children("*", "Control", true, false):
-		if control != scene.hud.mode_button:
+		if control != scene.hud.mode_button and control != scene.hud.game_button:
 			_expect(not control is BaseButton and control.mouse_filter == Control.MOUSE_FILTER_IGNORE, "play HUD passes through all input except the idle mode selector")
 	# Header, old pause target, court, former pads and build footer all work alike.
-	for position in [Vector2(24, 40), Vector2(280, 104), Vector2(210, 480), Vector2(200, 775), Vector2(350, 775), Vector2(216, 840), Vector2(3, 400)]:
+	for position in [Vector2(24, 220), Vector2(280, 104), Vector2(210, 480), Vector2(200, 775), Vector2(350, 775), Vector2(216, 840), Vector2(3, 400)]:
 		scene.rally.reset()
 		_touch(position, true)
 		await process_frame
@@ -147,14 +150,14 @@ func _run() -> void:
 	_touch(Vector2(200, 775), false)
 	await process_frame
 	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and is_equal_approx(scene.rally.shot_speed, 1.0), "primary finger alone decides a normal tap")
-	_touch(Vector2(24, 40), true)
+	_touch(Vector2(24, 220), true)
 	await process_frame
 	scene.notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)
 	_expect(scene.paused and not scene.rally.charging, "leaving app cancels gesture and pauses active rally")
 	# Simulate a lost touch release while switching apps.
-	_touch(Vector2(24, 40), true)
+	_touch(Vector2(24, 220), true)
 	await process_frame
-	_touch(Vector2(24, 40), false)
+	_touch(Vector2(24, 220), false)
 	await process_frame
 	_expect(not scene.paused, "touch ownership resets when switching apps")
 
@@ -176,9 +179,13 @@ func _run() -> void:
 	await _check_scene_charge_controls(scene)
 	await _check_scene_swipes(scene)
 	scene.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(scene_path))
 	await _check_pair_scene()
+	await _check_volley_scene()
 	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
 		var handed_scene = load("res://scenes/main.tscn").instantiate()
+		var hand_path := "user://hand_check_%d_%d.cfg" % [int(hand), Time.get_ticks_msec()]
+		handed_scene.save_path = hand_path
 		handed_scene.dominant_hand = hand
 		root.add_child(handed_scene)
 		await process_frame
@@ -211,8 +218,119 @@ func _run() -> void:
 		_expect(handed_scene.rally.returns == 1 and handed_scene.player.paddle_contact_position().distance_to(assisted_contact) < 0.001, "either hand extends its rendered racket to the assisted late strike")
 		_expect(handed_scene.ball._sphere.position == assisted_contact, "assisted strike does not rewind or teleport the ball")
 		handed_scene.free()
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(hand_path))
 	print("check_slice: %d checks, %d failed" % [checks, failures])
 	quit(0 if failures == 0 else 1)
+
+
+func _check_volley_rally() -> void:
+	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+		var volley := VolleyRally.new()
+		volley.dominant_hand = hand
+		volley.set_player_count(1)
+		_expect(volley.phase == WallRally.Phase.READY and volley.ball_pos == volley.paddle_position(0), "volley starts on the player's racket for either hand")
+		_expect(is_equal_approx(volley.paddle_position(0).x, 6.0) and is_equal_approx(volley.paddle_position(1).x, 6.0), "opposite-facing rackets share the straight volley lane")
+		volley.tap(Vector2.LEFT)
+		volley.advance(VolleyRally.FLIGHT_TIME * 0.5)
+		_expect(is_equal_approx(volley.ball_pos.z, VolleyRally.NET_Z) and volley.ball_pos.y > VolleyRally.NET_HEIGHT, "straight outgoing volley clears the net")
+		volley.advance(VolleyRally.FLIGHT_TIME * 0.5)
+		_expect(volley.phase == WallRally.Phase.RETURNING and volley.opponent_returns == 1 and volley.last_hitter == 1 and volley.ball_pos == volley.paddle_position(1), "CPU volleys automatically from its real racket contact")
+		for hit in range(40):
+			_until_return(volley)
+			_expect(volley.can_return() and volley.bounces == 0 and volley.wall_hits == 0, "player can volley without touching ground or wall")
+			var contact := volley.ball_pos
+			volley.tap(Vector2.RIGHT)
+			_expect(volley.returns == hit + 1 and volley.last_hitter == 0 and volley.ball_pos == contact and volley.last_contact_pos == contact, "one tap returns once from the actual player contact")
+			_expect(volley.shot_aim == Vector2.ZERO and is_equal_approx(volley.shot_speed, 1.0) and is_equal_approx(volley.ball_pos.x, 6.0), "volley ignores directional input and always travels straight at normal power")
+		_expect(volley.best == 40 and volley.opponent_returns == 40 and is_equal_approx(volley.pace(), 1.0), "straight 1v1 exchange sustains a long rally at a fixed pace")
+		volley.advance(10.0)
+		_expect(volley.phase == WallRally.Phase.MISSED and volley.returns == 40 and volley.bounces == 0, "missing a volley ends the rally without a wall-practice bounce")
+		volley.tap()
+		_expect(volley.returns == 0 and volley.best == 40 and volley.phase == WallRally.Phase.OUTBOUND, "tap retries volley while preserving its best")
+	var held := VolleyRally.new()
+	held.set_player_count(1)
+	held.press()
+	held.advance(0.8)
+	held.release(2.0, Vector2.LEFT)
+	_expect(not held.charging and held.returns == 0 and not held.has_queued_shot() and is_equal_approx(held.shot_speed, 1.0), "holding and releasing a volley tap never charges or queues another hit")
+	held.advance(10.0)
+	_expect(held.phase == WallRally.Phase.MISSED, "CPU returns do not make the player hit automatically")
+	var early := VolleyRally.new()
+	early.set_player_count(1)
+	early.tap()
+	early.advance(VolleyRally.FLIGHT_TIME * 1.6)
+	_expect(early.phase == WallRally.Phase.RETURNING and not early.can_return() and early.can_tap(), "volley cue allows a slightly early incoming tap")
+	early.tap()
+	early.advance(0.25)
+	_expect(early.returns == 1 and not early.has_queued_shot(), "short volley buffer consumes the tap on racket arrival")
+	var coarse := VolleyRally.new()
+	var fine := VolleyRally.new()
+	coarse.set_player_count(1)
+	fine.set_player_count(1)
+	coarse.tap()
+	fine.tap()
+	coarse.advance(1.8)
+	for step in range(180):
+		fine.advance(0.01)
+	_expect(coarse.phase == fine.phase and coarse.ball_pos.distance_to(fine.ball_pos) < 0.001, "volley trajectory preserves segment time on slow frames")
+
+
+func _check_volley_scene() -> void:
+	var path := "user://volley_check_%d.cfg" % Time.get_ticks_msec()
+	var scene = load("res://scenes/main.tscn").instantiate()
+	scene.save_path = path
+	root.add_child(scene)
+	await process_frame
+	scene.set_process(false)
+	scene.rally.best = 7
+	scene._change_player_count(2)
+	_touch(Vector2(140, 64), true)
+	await process_frame
+	_touch(Vector2(140, 64), false)
+	await process_frame
+	_expect(scene.volley_mode and scene.rally is VolleyRally and scene.rally.player_count == 1 and scene.rally.phase == WallRally.Phase.READY, "game selector enters fixed 1v1 volley without serving")
+	_expect(is_instance_valid(scene.partner) and scene.court._volley_root.visible and not scene.court._wall_parts[0].visible and not scene.hud.mode_button.visible, "volley displays a net and opponent without wall or pair controls")
+	_expect(scene.rally.best == 0 and scene.partner._id_label.text == "CPU" and scene.player._id_label.text == "YOU", "volley has a separate best and clear opponent identity")
+	_touch(Vector2(216, 480), true)
+	await process_frame
+	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and not scene.rally.charging, "volley touch hits immediately on finger down")
+	scene._update_swipe(&"touch", 0, Vector2(316, 480))
+	scene._press_started_msec -= 1000
+	_touch(Vector2(316, 480), false)
+	await process_frame
+	scene._sync_visuals(0.0)
+	_expect(scene.rally.shot_aim == Vector2.ZERO and is_equal_approx(scene.rally.shot_speed, 1.0) and not scene.hud._swipe_arrow.visible, "volley drag and hold cannot change direction or power")
+	_expect(not scene.hud.game_button.visible and scene.hud._gesture_hint.text.contains("Tap anywhere"), "playing volley retains full-screen tap input and simple instructions")
+	scene.rally.advance(VolleyRally.FLIGHT_TIME)
+	scene._sync_visuals(0.0)
+	_expect(scene.partner.paddle_contact_position().distance_to(scene.rally.last_contact_pos) < 0.001 and is_equal_approx(scene.partner._body.rotation.y, PI), "opponent faces the player and swings at the real contact")
+	_expect(scene.ball._impact.visible and not scene.ball._landing.visible, "CPU volley has a strike effect without a ground-bounce marker")
+	_until_return(scene.rally)
+	_touch(Vector2(216, 480), true)
+	await process_frame
+	scene._sync_visuals(0.0)
+	_expect(scene.rally.returns == 1 and scene.rally.phase == WallRally.Phase.OUTBOUND, "one incoming tap makes exactly one volley return")
+	_touch(Vector2(216, 480), false)
+	await process_frame
+	_expect(scene.rally.returns == 1 and not scene.rally.has_queued_shot(), "volley release does not add a second shot")
+	scene._toggle_pause()
+	scene._sync_visuals(0.0)
+	_touch(Vector2(140, 64), true)
+	await process_frame
+	_touch(Vector2(140, 64), false)
+	await process_frame
+	_expect(not scene.volley_mode and not scene.rally is VolleyRally and scene.rally.player_count == 2 and scene.rally.best == 7, "returning to wall restores pair practice and its separate record")
+	_expect(not scene.court._volley_root.visible and scene.court._wall_parts[0].visible and is_equal_approx(scene.partner._body.rotation.y, 0.0), "wall court and same-side partner are restored")
+	scene._change_game_mode(true)
+	_expect(scene.rally.best == 1, "returning to volley restores the volley record")
+	scene.free()
+	var restored = load("res://scenes/main.tscn").instantiate()
+	restored.save_path = path
+	root.add_child(restored)
+	await process_frame
+	_expect(restored.volley_mode and restored.rally is VolleyRally and restored.rally.best == 1 and restored._wall_players == 2, "reopening restores volley selection and keeps the wall player-count preference")
+	restored.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _check_pair_rally() -> void:

@@ -92,11 +92,16 @@ func sync_practice(rally: WallRally, delta: float, player_index: int = 0) -> voi
 		return
 	_clock += delta
 	var feet := rally.player_position(player_index)
+	var volley := rally is VolleyRally
+	var opponent := volley and player_index == 1
+	var facing := -1.0 if opponent else 1.0
 	var moving := feet.distance_to(_previous_pos) > 0.002
 	position = feet
-	_selection_ring.visible = rally.player_count == 1 or rally.active_player == player_index
-	_id_label.visible = rally.player_count == 2
-	_id_label.text = "P%d" % (player_index + 1)
+	_selection_ring.visible = not opponent and (rally.player_count == 1 or rally.active_player == player_index)
+	_id_label.visible = rally.player_count == 2 or volley
+	_id_label.text = ("CPU" if opponent else "YOU") if volley else "P%d" % (player_index + 1)
+	_id_label.position = Vector3(0.6 if opponent else -0.6, 5.0, 0.0) if volley else Vector3(0.0, 4.6, 0.0)
+	_body.rotation.y = PI if opponent else 0.0
 	_body.position.y = absf(sin(_clock * 14.0)) * 0.08 if moving else 0.0
 	_body.rotation.z = clampf((_previous_pos.x - position.x) * 1.5, -0.12, 0.12)
 	_previous_pos = position
@@ -106,7 +111,7 @@ func sync_practice(rally: WallRally, delta: float, player_index: int = 0) -> voi
 	var resting := rally.paddle_position(player_index)
 	# The face starts exactly at the real ball contact, then follows through.
 	var contact := rally.last_contact_pos.lerp(resting, recovery)
-	contact += Vector3(-side * follow * 0.3, follow * 0.15, -follow * 0.85)
+	contact += Vector3(-side * follow * 0.3 * facing, follow * 0.15, -follow * 0.85 * facing)
 	_paddle.position = contact - position
 	_paddle.rotation.y = -side * follow * 0.65
 	var shoulder := _body.transform * Vector3(side * 0.43, 2.75, 0.0)

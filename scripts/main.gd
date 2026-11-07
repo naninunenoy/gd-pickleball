@@ -6,7 +6,9 @@ const SWIPE_DEADZONE := 14.0 # Reference viewport pixels, independent of phone s
 @export var dominant_hand: WallRally.Hand = WallRally.Hand.RIGHT
 @export var save_path := SAVE_PATH
 
-var rally := WallRally.new()
+var rally: WallRally = WallRally.new()
+var volley_mode := false
+var _wall_players := 1
 var paused := false
 var auto_rally := false
 var _touch_until := 0
@@ -31,13 +33,18 @@ var partner: Athlete
 func _ready() -> void:
 	auto_rally = "--auto-rally" in OS.get_cmdline_user_args()
 	var config := ConfigFile.new()
-	if config.load(save_path) == OK:
-		rally.best = maxi(0, int(config.get_value("practice", "best", 0)))
+	config.load(save_path)
+	volley_mode = str(config.get_value("practice", "game", "wall")) == "volley"
+	_wall_players = clampi(int(config.get_value("practice", "players", 1)), 1, 2)
+	rally = VolleyRally.new() if volley_mode else WallRally.new()
+	rally.best = maxi(0, int(config.get_value("volley" if volley_mode else "practice", "best", 0)))
 	_saved_best = rally.best
 	rally.dominant_hand = dominant_hand
-	rally.set_player_count(int(config.get_value("practice", "players", 1)))
+	rally.set_player_count(1 if volley_mode else _wall_players)
 	_update_players()
 	hud.player_count_requested.connect(_change_player_count)
+	hud.volley_mode_requested.connect(_change_game_mode)
+	_sync_court_mode()
 	_sync_visuals(0.0)
 
 
@@ -72,22 +79,51 @@ func _sync_visuals(delta: float) -> void:
 
 
 func _update_players() -> void:
-	if rally.player_count == 2 and not is_instance_valid(partner):
+	if (rally.player_count == 2 or volley_mode) and not is_instance_valid(partner):
 		partner = Athlete.new()
 		partner.name = "Partner"
 		partner.outfit_color = Color("89bbd5")
 		partner.selection_color = Color("9ee4ff")
 		$World.add_child(partner)
-	elif rally.player_count == 1 and is_instance_valid(partner):
+	elif rally.player_count == 1 and not volley_mode and is_instance_valid(partner):
 		partner.queue_free()
 		partner = null
 
 
 func _change_player_count(count: int) -> void:
+	if volley_mode:
+		return
 	_cancel_press()
 	_save_best()
 	rally.set_player_count(count)
+	_wall_players = rally.player_count
 	_update_players()
+	_reset_round_tracking()
+	paused = false
+	_save_configuration()
+	_sync_visuals(0.0)
+
+
+func _sync_court_mode() -> void:
+	court.set_volley_mode(volley_mode)
+	$CameraRig.set_volley_mode(volley_mode)
+
+
+func _change_game_mode(enabled: bool) -> void:
+	_cancel_press()
+	_save_best()
+	if not volley_mode:
+		_wall_players = rally.player_count
+	volley_mode = enabled
+	var config := ConfigFile.new()
+	config.load(save_path)
+	rally = VolleyRally.new() if enabled else WallRally.new()
+	rally.dominant_hand = dominant_hand
+	rally.best = maxi(0, int(config.get_value("volley" if enabled else "practice", "best", 0)))
+	rally.set_player_count(1 if enabled else _wall_players)
+	_saved_best = rally.best
+	_update_players()
+	_sync_court_mode()
 	_reset_round_tracking()
 	paused = false
 	_save_configuration()
@@ -107,6 +143,9 @@ func _begin_press(source: StringName, id: int, position: Vector2 = Vector2.ZERO)
 	_press_origin = position
 	_swipe_direction = Vector2.ZERO
 	hud.clear_swipe()
+	if volley_mode:
+		_tap()
+		return
 	# One gesture owns both actions. Never hit on down: it may become a hold.
 	rally.press()
 
@@ -131,6 +170,8 @@ func _finish_press(source: StringName, id: int) -> void:
 	_press_id = -1
 	_swipe_direction = Vector2.ZERO
 	hud.clear_swipe()
+	if volley_mode:
+		return
 	var starting := rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED
 	if held < WallRally.MIN_POWER_HOLD:
 		# A canceled/missed hold must not turn into a tap that restarts play.
@@ -258,8 +299,10 @@ func _save_best() -> void:
 func _save_configuration() -> void:
 	var config := ConfigFile.new()
 	config.load(save_path)
-	config.set_value("practice", "best", maxi(rally.best, int(config.get_value("practice", "best", 0))))
-	config.set_value("practice", "players", rally.player_count)
+	var section := "volley" if volley_mode else "practice"
+	config.set_value(section, "best", maxi(rally.best, int(config.get_value(section, "best", 0))))
+	config.set_value("practice", "players", _wall_players)
+	config.set_value("practice", "game", "volley" if volley_mode else "wall")
 	if config.save(save_path) == OK:
 		_saved_best = rally.best
 

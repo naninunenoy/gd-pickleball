@@ -36,7 +36,7 @@ func sync_practice(rally: WallRally, delta: float) -> void:
 		return
 	_sphere.position = rally.ball_pos
 	_shadow.position = Vector3(rally.ball_pos.x, 0.06, rally.ball_pos.z)
-	_landing.visible = rally.phase == WallRally.Phase.RETURNING or rally.phase == WallRally.Phase.BOUNCED
+	_landing.visible = not rally is VolleyRally and (rally.phase == WallRally.Phase.RETURNING or rally.phase == WallRally.Phase.BOUNCED)
 	_landing.position = Vector3(rally.receive_apex.x, 0.055, rally.receive_apex.z)
 	_landing.scale = Vector3.ONE * (1.05 if rally.can_return() else 0.8)
 	_trail_time += delta
@@ -81,7 +81,7 @@ func _build_impact() -> void:
 
 
 func _sync_impact(rally: WallRally) -> void:
-	_impact.visible = rally.phase == WallRally.Phase.OUTBOUND and rally.contact_age < IMPACT_DURATION
+	_impact.visible = rally.phase != WallRally.Phase.READY and rally.phase != WallRally.Phase.MISSED and rally.contact_age < IMPACT_DURATION
 	if not _impact.visible:
 		return
 	_impact.position = rally.last_contact_pos

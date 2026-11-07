@@ -2,6 +2,7 @@ class_name PlayHud
 extends CanvasLayer
 
 signal player_count_requested(count: int)
+signal volley_mode_requested(enabled: bool)
 
 const CREAM := Color("eff0d7")
 const MUTED := Color("acbdac")
@@ -20,8 +21,12 @@ var _font: Font
 var _power_fill: StyleBoxFlat
 var _swipe_arrow: Line2D
 var mode_button: Button
+var game_button: Button
+var _title: Label
+var _score_caption: Label
 var _mode_status: Label
 var _displayed_count := 1
+var _displayed_volley := false
 var _last_touch_msec := -1000
 
 
@@ -38,7 +43,7 @@ func _ready() -> void:
 	pad_background.anchor_right = 1.0
 	_bottom(pad_background, 252, 252)
 	_label("P R A C T I C E   /   0 1", Vector2(24, 36), Vector2(280, 20), 12, MUTED)
-	_label("Wall rally", Vector2(24, 59), Vector2(270, 40), 30, CREAM)
+	_title = _label("Wall rally", Vector2(24, 59), Vector2(270, 40), 30, CREAM)
 	_mode_status = _label("1 PLAYER", Vector2(292, 36), Vector2(116, 60), 14, LIME)
 	_mode_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_mode_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -53,7 +58,18 @@ func _ready() -> void:
 	_root.add_child(mode_button)
 	_pin(mode_button, Vector2(292, 28), Vector2(116, 72))
 	mode_button.gui_input.connect(_mode_input)
-	_label("RALLY", Vector2(24, 116), Vector2(130, 20), 12, MUTED)
+	game_button = Button.new()
+	game_button.focus_mode = Control.FOCUS_NONE
+	game_button.add_theme_font_override("font", _font)
+	game_button.add_theme_font_size_override("font_size", 17)
+	game_button.add_theme_color_override("font_color", CREAM)
+	for state in ["normal", "hover", "focus"]:
+		game_button.add_theme_stylebox_override(state, _box(Color("2b5144"), 12))
+	game_button.add_theme_stylebox_override("pressed", _box(Color("3b6555"), 12))
+	_root.add_child(game_button)
+	_pin(game_button, Vector2(24, 28), Vector2(244, 72))
+	game_button.gui_input.connect(_game_input)
+	_score_caption = _label("RALLY", Vector2(24, 116), Vector2(130, 20), 12, MUTED)
 	_score = _label("00", Vector2(20, 130), Vector2(220, 78), 64, CREAM)
 	_label("PERSONAL BEST", Vector2(267, 123), Vector2(142, 20), 11, MUTED)
 	_best = _label("00", Vector2(266, 146), Vector2(140, 50), 34, CREAM)
@@ -123,6 +139,17 @@ func _mode_input(event: InputEvent) -> void:
 		mode_button.accept_event()
 
 
+func _game_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		if event.pressed and not event.canceled:
+			volley_mode_requested.emit(not _displayed_volley)
+		game_button.accept_event()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed and Time.get_ticks_msec() - _last_touch_msec > 600:
+			volley_mode_requested.emit(not _displayed_volley)
+		game_button.accept_event()
+
+
 func _build_identifier() -> String:
 	if FileAccess.file_exists("res://build_info.json"):
 		var info = JSON.parse_string(FileAccess.get_file_as_string("res://build_info.json"))
@@ -138,19 +165,30 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 		clear_swipe()
 	_score.text = "%02d" % rally.returns
 	_best.text = "%02d" % rally.best
+	_displayed_volley = rally is VolleyRally
+	_title.text = "Volley rally" if _displayed_volley else "Wall rally"
+	_score_caption.text = "VOLLEYS" if _displayed_volley else "RALLY"
+	_gesture_hint.text = "Tap anywhere  /  Straight volleys" if _displayed_volley else "Swipe to aim  /  Hold for power"
 	_displayed_count = rally.player_count
 	var may_change := (rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED or paused) and not rally.charging
-	mode_button.visible = may_change
+	mode_button.visible = may_change and not _displayed_volley
+	game_button.visible = may_change
+	game_button.text = "VOLLEY RALLY\nSWITCH TO WALL" if _displayed_volley else "WALL RALLY\nSWITCH TO VOLLEY"
 	mode_button.text = "%d PLAYER%s\nSWITCH" % [rally.player_count, "S" if rally.player_count == 2 else ""]
-	_mode_status.visible = not may_change
+	_mode_status.visible = not mode_button.visible
 	_mode_status.text = "%d PLAYER%s" % [rally.player_count, "S" if rally.player_count == 2 else ""]
 	if rally.player_count == 2:
 		_mode_status.text += "\nP%d TO HIT" % (rally.active_player + 1)
+	if _displayed_volley:
+		_mode_status.text = "1 vs 1\nYOU vs CPU"
 	_mode_status.add_theme_color_override("font_color", Color("9ee4ff") if rally.active_player == 1 else LIME)
 	_pause_dim.visible = paused
 	var held := rally.charging and rally.charge_time >= WallRally.MIN_POWER_HOLD
 	_progress.value = rally.charge_fraction() if held else rally.bounce_progress()
 	_power_fill.bg_color = Color("ffb06d") if held else LIME
+	if _displayed_volley:
+		_sync_volley(rally, paused)
+		return
 	var ready := rally.can_tap()
 	if paused:
 		_message.text = "Take a breath."
@@ -179,6 +217,30 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 	else:
 		_message.text = "Let it bounce." if rally.phase == WallRally.Phase.RETURNING else "Get ready."
 		_hint.text = "Tap anywhere after the bounce."
+
+
+func _sync_volley(rally: WallRally, paused: bool) -> void:
+	if paused:
+		_message.text = "Take a breath."
+		_hint.text = "Tap anywhere to resume."
+	elif rally.phase == WallRally.Phase.READY:
+		_message.text = "Ready to volley?"
+		_hint.text = "Tap anywhere to start."
+	elif rally.phase == WallRally.Phase.MISSED:
+		_message.text = "The ball passed."
+		_hint.text = "Tap anywhere to try again."
+	elif rally.phase == WallRally.Phase.OUTBOUND:
+		_message.text = rally.last_feedback
+		_hint.text = "Your opponent returns automatically."
+	elif rally.has_queued_shot():
+		_message.text = "Ready for the ball."
+		_hint.text = "Your tap will hit when it arrives."
+	elif rally.can_tap():
+		_message.text = "Tap to volley!"
+		_hint.text = "No bounce. Tap anywhere."
+	else:
+		_message.text = "Here it comes."
+		_hint.text = "Tap as the ball approaches."
 
 
 func _label(text: String, pos: Vector2, size: Vector2, font_size: int, color: Color) -> Label:

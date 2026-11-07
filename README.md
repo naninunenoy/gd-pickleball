@@ -1,8 +1,12 @@
 # gd-pickleball
 
-**Wall rally** — solo or two-player pickleball practice, made for your phone in portrait.
+**Pickleball practice** — wall rallies and 1v1 volleys, made for your phone in portrait.
 
-One wall. Practice with one or two athletes on the same phone. Tap anywhere to serve and return after one bounce. Footwork is automatic; keep the rally going and beat your saved personal best.
+Use the left header selector before playing, after a miss, or while paused to switch between **WALL RALLY** and **VOLLEY RALLY**. The choice is saved. Wall practice keeps its separate one/two-player selector and its existing controls.
+
+**Volley rally** is a simple 1v1 exchange with an automatic opponent across a net. Tap anywhere to start, then tap as the return approaches. Shots fire on finger down, travel straight at a fixed pace, clear the net, and are hit without a bounce. Holds and swipes do not change speed or direction, and lifting your finger does not add another hit. A slightly early tap waits briefly for the ball to enter racket reach. If the ball passes, tap to restart. Volley and wall practice have separate personal bests; switching back restores the wall player-count preference.
+
+**Wall rally:** One wall. Practice with one or two athletes on the same phone. Tap anywhere to serve and return after one bounce. Footwork is automatic; keep the rally going and beat your saved personal best.
 
 The entire screen accepts taps and holds, including the score and footer. During a rally, there are no shot or player-switch buttons. Release a short tap for a normal shot, with a little early-tap assistance. You can also return the ball as it falls after the apex: normal taps and strong shots share the same extended reach during descent. Holding for at least 0.2 seconds selects optional power: release near the racket for a faster shot, up to 1.6x at 0.75 seconds. Nothing fires on press, so normal taps and holds never compete. Before lifting your finger, optionally swipe to aim: left/right changes the lateral shot direction, up/down sends it higher/lower. An arrow previews your swipe. A still tap sends the ball straight toward the wall; hold duration controls speed independently of aiming. A bright ring and sparks mark each strike. Tap to retry after a second bounce. Desktop click or Space / Enter uses the same gesture. P / Escape pauses; R resets. Leaving the app/tab pauses an active rally; tap anywhere to resume.
 
