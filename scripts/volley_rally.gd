@@ -5,11 +5,12 @@ extends WallRally
 const NET_Z := 11.5
 const NET_HEIGHT := 2.85
 const VOLLEY_HEIGHT := 3.2
-const FLIGHT_TIME := 1.25
-const TAP_BUFFER := 0.45
-const VOLLEY_REACH := 2.1
+const FLIGHT_TIME := 1.4
+const VOLLEY_REACH := 2.8
+const INCOMING_END_Z := 19.4
 
 var opponent_returns := 0
+var _return_queued := false
 
 
 func reset() -> void:
@@ -53,7 +54,16 @@ func can_power_return() -> bool:
 
 
 func can_tap() -> bool:
-	return phase == Phase.RETURNING and (can_return() or phase_time + TAP_BUFFER >= _duration * 0.73)
+	return phase == Phase.RETURNING
+
+
+func has_queued_shot() -> bool:
+	return _return_queued
+
+
+func cancel_charge() -> void:
+	super.cancel_charge()
+	_return_queued = false
 
 
 func bounce_progress() -> float:
@@ -76,7 +86,7 @@ func tap(_aim: Vector2 = Vector2.ZERO) -> void:
 		if can_return():
 			_return_ball()
 		else:
-			swing_buffer = TAP_BUFFER
+			_return_queued = true
 			last_feedback = "Ready to volley"
 
 
@@ -101,11 +111,10 @@ func advance(delta: float) -> void:
 		remaining -= step
 		phase_time += step
 		contact_age += step
-		swing_buffer = maxf(0.0, swing_buffer - step)
 		var progress := clampf(phase_time / _duration, 0.0, 1.0)
 		ball_pos = _from.lerp(_to, progress)
 		ball_pos.y += 4.0 * _apex * progress * (1.0 - progress)
-		if swing_buffer > 0.0 and can_return():
+		if _return_queued and can_return():
 			_return_ball()
 		elif phase_time >= _duration - 0.000001:
 			ball_pos = _to
@@ -115,7 +124,7 @@ func advance(delta: float) -> void:
 				last_contact_pos = ball_pos
 				contact_age = 0.0
 				last_feedback = "Opponent returns"
-				_segment(Phase.RETURNING, Vector3(6.0, VOLLEY_HEIGHT, 20.5), FLIGHT_TIME * pace(), 0.4)
+				_segment(Phase.RETURNING, Vector3(6.0, VOLLEY_HEIGHT, INCOMING_END_Z), FLIGHT_TIME * pace(), 0.4)
 			else:
 				phase = Phase.MISSED
 				cancel_charge()

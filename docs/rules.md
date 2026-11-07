@@ -8,10 +8,10 @@ The left header selector switches **WALL RALLY / VOLLEY RALLY** before play, aft
 
 ## 1v1 volley rally
 
-- You play on the near side of a net; one automatic opponent faces you from the far side.
+- You play from a first-person viewpoint on the near side of a net; one automatic opponent faces you from the far side. Your racket appears in the foreground and a small center marker indicates when the ball is in reach.
 - Tap anywhere to start. Tap again as each return approaches your racket. Every shot stays straight and clears the net, without a ground bounce.
 - A tap hits on finger down. Holding, dragging and releasing do not charge, aim, repeat or add another shot.
-- A slightly early incoming tap waits up to 0.45 seconds for the ball to reach the racket. Taps while your shot is traveling to the opponent do not hit again.
+- Tap at any point after the opponent returns the ball. An early tap stays queued for that incoming ball until it reaches your racket. The rhythm is a little slower and the contact area is wider; late balls remain visible near your side. One tap returns one ball. Taps while your own shot travels toward the opponent do not hit again.
 - The opponent volleys automatically from its own racket. Your successful returns count toward the volley record; the opening shot does not count.
 - If a return passes you, the rally ends. Tap to restart, or use the header selector to return to wall practice.
 - This mode has one player versus one automatic opponent. The wall practice player-count selector is hidden here.

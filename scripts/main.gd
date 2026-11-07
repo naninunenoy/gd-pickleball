@@ -74,6 +74,7 @@ func _sync_visuals(delta: float) -> void:
 	if is_instance_valid(partner):
 		partner.sync_practice(rally, delta, 1)
 	ball.sync_practice(rally, delta)
+	$CameraRig.sync_volley(rally)
 	court.animate(delta)
 	hud.sync_state(rally, paused)
 
@@ -107,6 +108,7 @@ func _change_player_count(count: int) -> void:
 func _sync_court_mode() -> void:
 	court.set_volley_mode(volley_mode)
 	$CameraRig.set_volley_mode(volley_mode)
+	player.visible = not volley_mode
 
 
 func _change_game_mode(enabled: bool) -> void:

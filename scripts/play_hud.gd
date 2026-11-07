@@ -16,6 +16,8 @@ var _hint: Label
 var _gesture_hint: Label
 var _progress: ProgressBar
 var _pause_dim: ColorRect
+var _pad_background: ColorRect
+var _reticle: Node2D
 var _root: Control
 var _font: Font
 var _power_fill: StyleBoxFlat
@@ -36,12 +38,12 @@ func _ready() -> void:
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
-	var pad_background := ColorRect.new()
-	pad_background.color = Color("173e36")
-	pad_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(pad_background)
-	pad_background.anchor_right = 1.0
-	_bottom(pad_background, 252, 252)
+	_pad_background = ColorRect.new()
+	_pad_background.color = Color("173e36")
+	_pad_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(_pad_background)
+	_pad_background.anchor_right = 1.0
+	_bottom(_pad_background, 252, 252)
 	_label("P R A C T I C E   /   0 1", Vector2(24, 36), Vector2(280, 20), 12, MUTED)
 	_title = _label("Wall rally", Vector2(24, 59), Vector2(270, 40), 30, CREAM)
 	_mode_status = _label("1 PLAYER", Vector2(292, 36), Vector2(116, 60), 14, LIME)
@@ -93,9 +95,13 @@ func _ready() -> void:
 	_bottom(_progress, 151, 5)
 	_gesture_hint = _label("Swipe to aim  /  Hold for power", Vector2(24, 0), Vector2(384, 28), 13, MUTED)
 	_gesture_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gesture_hint.add_theme_color_override("font_shadow_color", Color("173e36"))
+	_gesture_hint.add_theme_constant_override("shadow_offset_x", 1)
+	_gesture_hint.add_theme_constant_override("shadow_offset_y", 1)
 	_bottom(_gesture_hint, 100, 28)
 	build_label = _label(_build_identifier(), Vector2(24, 0), Vector2(384, 22), 16, CREAM)
 	build_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	build_label.add_theme_stylebox_override("normal", _box(Color(0.07, 0.2, 0.16, 0.92), 5))
 	_bottom(build_label, 32, 22)
 	_pause_dim = ColorRect.new()
 	_pause_dim.color = Color(0.06, 0.16, 0.13, 0.94)
@@ -110,6 +116,14 @@ func _ready() -> void:
 	_swipe_arrow.antialiased = true
 	_swipe_arrow.visible = false
 	_root.add_child(_swipe_arrow)
+	_reticle = Node2D.new()
+	_root.add_child(_reticle)
+	for points in [PackedVector2Array([Vector2(-5, 0), Vector2(5, 0)]), PackedVector2Array([Vector2(0, -5), Vector2(0, 5)])]:
+		var stroke := Line2D.new()
+		stroke.points = points
+		stroke.width = 1.5
+		_reticle.add_child(stroke)
+	_reticle.visible = false
 
 
 func show_swipe(start: Vector2, end: Vector2) -> void:
@@ -166,6 +180,10 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 	_score.text = "%02d" % rally.returns
 	_best.text = "%02d" % rally.best
 	_displayed_volley = rally is VolleyRally
+	_pad_background.visible = not _displayed_volley
+	_reticle.visible = _displayed_volley
+	_reticle.position = _root.size * 0.5
+	_reticle.modulate = LIME if rally.can_return() else Color(1.0, 1.0, 1.0, 0.55)
 	_title.text = "Volley rally" if _displayed_volley else "Wall rally"
 	_score_caption.text = "VOLLEYS" if _displayed_volley else "RALLY"
 	_gesture_hint.text = "Tap anywhere  /  Straight volleys" if _displayed_volley else "Swipe to aim  /  Hold for power"
@@ -187,8 +205,14 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 	_progress.value = rally.charge_fraction() if held else rally.bounce_progress()
 	_power_fill.bg_color = Color("ffb06d") if held else LIME
 	if _displayed_volley:
+		_top(_message, 218, 32)
+		_top(_hint, 256, 28)
+		_top(_progress, 292, 5)
 		_sync_volley(rally, paused)
 		return
+	_bottom(_message, 225, 32)
+	_bottom(_hint, 187, 28)
+	_bottom(_progress, 151, 5)
 	var ready := rally.can_tap()
 	if paused:
 		_message.text = "Take a breath."
@@ -265,6 +289,13 @@ func _bottom(control: Control, from_bottom: float, height: float) -> void:
 	control.anchor_bottom = 1.0
 	control.offset_top = -from_bottom
 	control.offset_bottom = -from_bottom + height
+
+
+func _top(control: Control, from_top: float, height: float) -> void:
+	control.anchor_top = 0.0
+	control.anchor_bottom = 0.0
+	control.offset_top = from_top
+	control.offset_bottom = from_top + height
 
 
 func _box(color: Color, radius: int) -> StyleBoxFlat:
