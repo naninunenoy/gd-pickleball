@@ -4,12 +4,17 @@ extends Node3D
 ## Footwork and the striking hand share the simulation's contact geometry.
 const FOLLOW_THROUGH := 0.28
 
+@export var outfit_color := Color("e9f0d7")
+@export var selection_color := Color("d5ef9d")
+
 var _body: Node3D
 var _paddle: Node3D
 var _upper_arm: MeshInstance3D
 var _forearm: MeshInstance3D
 var _hand: MeshInstance3D
 var _free_arm: MeshInstance3D
+var _selection_ring: MeshInstance3D
+var _id_label: Label3D
 var _clock := 0.0
 var _previous_pos := Vector3(WallRally.WIDTH * 0.5, 0.0, WallRally.PLAYER_Z)
 
@@ -17,7 +22,7 @@ var _previous_pos := Vector3(WallRally.WIDTH * 0.5, 0.0, WallRally.PLAYER_Z)
 func _ready() -> void:
 	_body = Node3D.new()
 	add_child(_body)
-	_piece(CapsuleMesh.new(), Vector3(0.0, 2.1, 0.0), Color("e9f0d7"), Vector3(0.82, 1.1, 0.65))
+	_piece(CapsuleMesh.new(), Vector3(0.0, 2.1, 0.0), outfit_color, Vector3(0.82, 1.1, 0.65))
 	var head := SphereMesh.new()
 	head.radius = 0.43
 	head.height = 0.86
@@ -53,9 +58,9 @@ func _ready() -> void:
 	grip.position.y = -0.5
 	grip.material_override = _material(Color("243e38"))
 	_paddle.add_child(grip)
-	_upper_arm = _arm_piece(Color("e9f0d7"), 0.16)
+	_upper_arm = _arm_piece(outfit_color, 0.16)
 	_forearm = _arm_piece(Color("edb38c"), 0.12)
-	_free_arm = _arm_piece(Color("e9f0d7"), 0.15)
+	_free_arm = _arm_piece(outfit_color, 0.15)
 	var hand_mesh := SphereMesh.new()
 	hand_mesh.radius = 0.16
 	hand_mesh.height = 0.32
@@ -66,26 +71,39 @@ func _ready() -> void:
 	var ring := TorusMesh.new()
 	ring.inner_radius = 0.9
 	ring.outer_radius = 1.0
-	_piece(ring, Vector3(0.0, 0.04, 0.0), Color("d5ef9d"))
+	_selection_ring = _piece(ring, Vector3(0.0, 0.04, 0.0), selection_color)
+	_id_label = Label3D.new()
+	_id_label.position = Vector3(0.0, 4.6, 0.0)
+	_id_label.font = load("res://fonts/Inter-Regular.ttf")
+	_id_label.font_size = 48
+	_id_label.pixel_size = 0.02
+	_id_label.outline_size = 6
+	_id_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_id_label.modulate = selection_color
+	add_child(_id_label)
 
 
 func paddle_contact_position() -> Vector3:
 	return _paddle.global_position
 
 
-func sync_practice(rally: WallRally, delta: float) -> void:
+func sync_practice(rally: WallRally, delta: float, player_index: int = 0) -> void:
 	if _body == null:
 		return
 	_clock += delta
-	var moving := rally.player_pos.distance_to(_previous_pos) > 0.002
-	position = rally.player_pos
+	var feet := rally.player_position(player_index)
+	var moving := feet.distance_to(_previous_pos) > 0.002
+	position = feet
+	_selection_ring.visible = rally.player_count == 1 or rally.active_player == player_index
+	_id_label.visible = rally.player_count == 2
+	_id_label.text = "P%d" % (player_index + 1)
 	_body.position.y = absf(sin(_clock * 14.0)) * 0.08 if moving else 0.0
 	_body.rotation.z = clampf((_previous_pos.x - position.x) * 1.5, -0.12, 0.12)
 	_previous_pos = position
 	var side := rally.hand_side()
-	var recovery := clampf(rally.contact_age / FOLLOW_THROUGH, 0.0, 1.0)
+	var recovery := clampf(rally.contact_age / FOLLOW_THROUGH, 0.0, 1.0) if rally.last_hitter == player_index else 1.0
 	var follow := sin(recovery * PI)
-	var resting := rally.paddle_position()
+	var resting := rally.paddle_position(player_index)
 	# The face starts exactly at the real ball contact, then follows through.
 	var contact := rally.last_contact_pos.lerp(resting, recovery)
 	contact += Vector3(-side * follow * 0.3, follow * 0.15, -follow * 0.85)
@@ -119,13 +137,14 @@ func _connect_arm(arm: MeshInstance3D, start: Vector3, end: Vector3) -> void:
 		arm.quaternion = Quaternion(Vector3.UP, offset.normalized())
 
 
-func _piece(mesh: Mesh, pos: Vector3, color: Color, mesh_scale: Vector3 = Vector3.ONE) -> void:
+func _piece(mesh: Mesh, pos: Vector3, color: Color, mesh_scale: Vector3 = Vector3.ONE) -> MeshInstance3D:
 	var part := MeshInstance3D.new()
 	part.mesh = mesh
 	part.position = pos
 	part.scale = mesh_scale
 	part.material_override = _material(color)
 	_body.add_child(part)
+	return part
 
 
 func _material(color: Color) -> StandardMaterial3D:

@@ -6,12 +6,12 @@
 
 - `wall_rally.gd`: deterministic practice state and analytic ball trajectories, independent of display/input. READY -> OUTBOUND -> RETURNING -> BOUNCED -> OUTBOUND on a legal tap, or MISSED on a second ground bounce.
 - `main.gd`: input, pause/focus lifecycle, local best persistence, auto-rally diagnostics, scene synchronization.
-- `athlete.gd`: one automatically moving player with a paddle swing.
+- `athlete.gd`: automatically moving athletes with separate identities, selection rings and paddle swings.
 - `ball.gd`: bright ball, ground shadow, short trail and contact marker.
-- `court_3d.gd`: half court and solid wall; there is no net, CPU or partner.
+- `court_3d.gd`: half court and solid wall; there is no net or opposing CPU.
 - `camera_rig.gd`: stable portrait camera showing the full wall, bounce zone and player.
 - `play_hud.gd`: rally/best counters, timing and gesture cues, build identifier; every control ignores pointer input.
-- `check_slice.gd`: deterministic rules and full-scene input/lifecycle regression checks.
+- `check_slice.gd`: deterministic rules and full-scene input/lifecycle regression checks, including mode persistence and receiver handoff.
 
 Coordinates are feet, X across a 12-foot practice lane, Y up, Z away from the wall at Z=0. The wall returns the ball along the shot's course within the lane. An outbound arc hits the wall at height 3.4 by default (2.0–4.8 with vertical aiming), then returns to a ground bounce at Z=13.6. The next bounce would be at Z=23. Contact between 16% and 84% of that bounce arc sends the ball back only when the racket can reach it. Short taps hit on release, with a 0.35s early-tap buffer. Optional POWER releases retain their selected power until this ball reaches the assisted contact area or the shot is canceled by a second bounce, pause, or new input. Both buffers expire and are consumed by one return. Each return counts once; serving counts zero. Rally progression gradually shrinks flight times to a 72% floor, with optional held-shot speed applied separately. Integration uses small steps and preserves segment overshoot so slow frames do not skip entire input windows.
 
@@ -25,9 +25,19 @@ The player moves to that fixed destination before the bounce and waits there thr
 
 The held serve ball starts on the racket. A return preserves the current ball position and launches its outgoing arc from that exact point. `last_contact_pos` and `contact_age` drive a 0.28s follow-through that begins with the rendered racket face at the real contact, then blends back to the ready pose. The striking arm, hand, free arm and swing rotation all mirror with handedness. Visual synchronization uses the same `player_pos` and racket coordinates as the simulation.
 
+## Two-player prediction and ownership
+
+`WallRally` stores two independent foot positions and paddle heights; `player_pos` and `paddle_height` address the active receiver for existing input/contact APIs. `set_player_count(1|2)` resets the rally while retaining best and handedness. Both athletes use the internal handedness setting. Solo movement timing and straight shots retain their existing behavior.
+
+In pair mode, `_launch()` predicts the outbound wall impact, lateral reflection and next post-bounce apex immediately after a successful strike. It compares each athlete's distance to the feet position offset for the racket, divided by `MOVE_SPEED`, and selects the shortest arrival time. A tie keeps the current athlete. The wall rebound confirms the same prediction without selecting again. Neither charging, releasing early nor a frame update changes the receiver; only the next successful shot or a mode reset may do so. The selected athlete moves to the fixed receiving stance; the other moves to their home racket lane (X=3 or 9, with feet offset for the striking hand) at Z=21.4, behind the receiving lane.
+
+`last_hitter` is separate from `active_player`. `Athlete.sync_practice(..., player_index)` renders its own foot position and racket and uses contact follow-through only for `last_hitter`, preventing a switched receiver from inheriting the previous athlete's swing. P1 is cream, P2 is blue, both have ID labels, and only the active receiver shows a foot ring. `main.gd` creates/removes the second athlete when changing mode.
+
+The mode selector is available in READY, MISSED and pause, disappears while charging or playing, and does not launch a ball. Changing mode cancels controller ownership and queued shots, restarts READY, and saves `practice.players` alongside the shared `practice.best` in the existing config. Config writes preserve the highest stored best. `save_path` can isolate full-scene persistence checks from the real player profile.
+
 ## Input and lifecycle
 
-The whole viewport accepts one gesture, including the header and footer. There are no buttons or HUD input signals. Every HUD Control has `MOUSE_FILTER_IGNORE`, so it cannot consume a press. Touch, left mouse and Space/Enter all call `press()` on down without checking racket range or hitting. On release, `main.gd` uses wall-clock elapsed time: below `MIN_POWER_HOLD` (0.2s), cancel charging and call normal `tap()`; otherwise call `release(elapsed)`. The branches are exclusive. Normal taps retain their 0.35s early buffer and 0.42-foot ascending contact radius; descending taps use the shared arm/racket reach. `can_tap()` gives an early HUD cue.
+During a rally the whole viewport accepts one gesture, including the header and footer. There are no shot or player-switch controls. HUD labels have `MOUSE_FILTER_IGNORE`. The sole mode selector accepts input only in READY, MISSED or paused states and emits `player_count_requested`; touch and synthetic mouse cannot activate it twice. Touch, left mouse and Space/Enter all call `press()` on down without checking racket range or hitting. On release, `main.gd` uses wall-clock elapsed time: below `MIN_POWER_HOLD` (0.2s), cancel charging and call normal `tap()`; otherwise call `release(elapsed)`. The branches are exclusive. Normal taps retain their 0.35s early buffer and 0.42-foot ascending contact radius; descending taps use the shared arm/racket reach. `can_tap()` gives an early HUD cue.
 
 Touch and mouse gestures record the initial viewport position and the owning pointer's current/release position. Movement under 14 reference pixels is ignored; otherwise the normalized displacement becomes the shot aim. Reference viewport coordinates make the deadzone scale consistently across phones. Keyboard-only shots pass zero aim. `PlayHud` draws a noninteractive arrow during an active swipe and clears it on release or cancellation. Secondary pointers cannot change aim.
 

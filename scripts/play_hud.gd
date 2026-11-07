@@ -1,6 +1,8 @@
 class_name PlayHud
 extends CanvasLayer
 
+signal player_count_requested(count: int)
+
 const CREAM := Color("eff0d7")
 const MUTED := Color("acbdac")
 const LIME := Color("d5ed9c")
@@ -17,6 +19,10 @@ var _root: Control
 var _font: Font
 var _power_fill: StyleBoxFlat
 var _swipe_arrow: Line2D
+var mode_button: Button
+var _mode_status: Label
+var _displayed_count := 1
+var _last_touch_msec := -1000
 
 
 func _ready() -> void:
@@ -33,6 +39,20 @@ func _ready() -> void:
 	_bottom(pad_background, 252, 252)
 	_label("P R A C T I C E   /   0 1", Vector2(24, 36), Vector2(280, 20), 12, MUTED)
 	_label("Wall rally", Vector2(24, 59), Vector2(270, 40), 30, CREAM)
+	_mode_status = _label("1 PLAYER", Vector2(292, 36), Vector2(116, 60), 14, LIME)
+	_mode_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_mode_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mode_button = Button.new()
+	mode_button.focus_mode = Control.FOCUS_NONE
+	mode_button.add_theme_font_override("font", _font)
+	mode_button.add_theme_font_size_override("font_size", 16)
+	mode_button.add_theme_color_override("font_color", CREAM)
+	for state in ["normal", "hover", "focus"]:
+		mode_button.add_theme_stylebox_override(state, _box(Color("2b5144"), 12))
+	mode_button.add_theme_stylebox_override("pressed", _box(Color("3b6555"), 12))
+	_root.add_child(mode_button)
+	_pin(mode_button, Vector2(292, 28), Vector2(116, 72))
+	mode_button.gui_input.connect(_mode_input)
 	_label("RALLY", Vector2(24, 116), Vector2(130, 20), 12, MUTED)
 	_score = _label("00", Vector2(20, 130), Vector2(220, 78), 64, CREAM)
 	_label("PERSONAL BEST", Vector2(267, 123), Vector2(142, 20), 11, MUTED)
@@ -87,6 +107,22 @@ func clear_swipe() -> void:
 		_swipe_arrow.visible = false
 
 
+func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch or event is InputEventScreenDrag:
+		_last_touch_msec = Time.get_ticks_msec()
+
+
+func _mode_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		if event.pressed and not event.canceled:
+			player_count_requested.emit(3 - _displayed_count)
+		mode_button.accept_event()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed and Time.get_ticks_msec() - _last_touch_msec > 600:
+			player_count_requested.emit(3 - _displayed_count)
+		mode_button.accept_event()
+
+
 func _build_identifier() -> String:
 	if FileAccess.file_exists("res://build_info.json"):
 		var info = JSON.parse_string(FileAccess.get_file_as_string("res://build_info.json"))
@@ -102,6 +138,15 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 		clear_swipe()
 	_score.text = "%02d" % rally.returns
 	_best.text = "%02d" % rally.best
+	_displayed_count = rally.player_count
+	var may_change := (rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED or paused) and not rally.charging
+	mode_button.visible = may_change
+	mode_button.text = "%d PLAYER%s\nSWITCH" % [rally.player_count, "S" if rally.player_count == 2 else ""]
+	_mode_status.visible = not may_change
+	_mode_status.text = "%d PLAYER%s" % [rally.player_count, "S" if rally.player_count == 2 else ""]
+	if rally.player_count == 2:
+		_mode_status.text += "\nP%d TO HIT" % (rally.active_player + 1)
+	_mode_status.add_theme_color_override("font_color", Color("9ee4ff") if rally.active_player == 1 else LIME)
 	_pause_dim.visible = paused
 	var held := rally.charging and rally.charge_time >= WallRally.MIN_POWER_HOLD
 	_progress.value = rally.charge_fraction() if held else rally.bounce_progress()

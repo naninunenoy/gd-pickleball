@@ -1,10 +1,10 @@
 # Wall rally rules
 
-One player, one practice wall. Play upright on a phone and try to beat your longest rally. All in-game text stays English.
+One or two athletes, one practice wall, controlled on the same phone. Play upright on a phone and try to beat your longest rally. All in-game text stays English.
 
 ## Full-screen taps and holds
 
-- The entire screen accepts input, including the score, instructions and build footer. There are no buttons.
+- The entire screen accepts input, including the score, instructions and build footer. There are no shot or player-switch buttons during a rally.
 - A short tap (under 0.2 seconds) serves or returns at normal speed when you lift your finger. You do not need to hold for normal play.
 - Let the wall's return bounce once. A slightly early normal tap waits up to 0.35 seconds for the ball to reach the racket.
 - You can tap after the highest point while the ball is falling and still within arm/racket reach. Normal taps and strong shots share this descending reach; you do not need power to hit a falling ball.
@@ -17,6 +17,12 @@ One player, one practice wall. Play upright on a phone and try to beat your long
 - A second ground bounce ends the rally. Tap to retry; your personal best stays saved.
 
 Swiping is optional; ordinary taps still work. No double-tapping or shot selection is required. A pause, app switch or canceled touch cancels a hold and queued input. The rally gradually speeds up with its length, and wall returns follow the shot's lateral direction within the lane. Shots without a swipe travel straight out and back; return count never changes their direction.
+
+## One or two players
+
+Use the **1 PLAYER / 2 PLAYERS** selector before serving, after a second bounce, or while paused. It disappears during play so the whole screen continues to accept shots. Changing mode starts a fresh rally, cancels held/queued shots, and keeps your shared best. Your chosen mode is remembered next time.
+
+In two-player practice, P1 wears cream and P2 wears blue. Their labels identify them; only the next receiver has a glowing foot ring. After every successful strike, the game predicts the wall reflection and the highest point after the first ground bounce. The athlete with the shortest travel time to the receiving stance is selected immediately. That athlete owns the next tap, hold or swipe and remains selected until the next successful hit. The other athlete moves to a separate waiting position behind the receiving lane. A player can receive consecutive balls: course determines the receiver, not a fixed turn order. Holds may start before the ball is in range. The previous hitter completes their own swing even after the receiver changes.
 
 ## Screen and pause
 

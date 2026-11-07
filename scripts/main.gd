@@ -4,6 +4,7 @@ const SAVE_PATH := "user://wall_practice.cfg"
 const SWIPE_DEADZONE := 14.0 # Reference viewport pixels, independent of phone size.
 
 @export var dominant_hand: WallRally.Hand = WallRally.Hand.RIGHT
+@export var save_path := SAVE_PATH
 
 var rally := WallRally.new()
 var paused := false
@@ -19,6 +20,7 @@ var _last_returns := 0
 var _last_wall_hits := 0
 var _saved_best := 0
 var _miss_time := 0.0
+var partner: Athlete
 
 @onready var player: Athlete = $World/Player
 @onready var ball: RallyBall = $World/Ball
@@ -29,11 +31,13 @@ var _miss_time := 0.0
 func _ready() -> void:
 	auto_rally = "--auto-rally" in OS.get_cmdline_user_args()
 	var config := ConfigFile.new()
-	if config.load(SAVE_PATH) == OK:
+	if config.load(save_path) == OK:
 		rally.best = maxi(0, int(config.get_value("practice", "best", 0)))
 	_saved_best = rally.best
 	rally.dominant_hand = dominant_hand
-	rally.reset()
+	rally.set_player_count(int(config.get_value("practice", "players", 1)))
+	_update_players()
+	hud.player_count_requested.connect(_change_player_count)
 	_sync_visuals(0.0)
 
 
@@ -59,10 +63,35 @@ func _process(delta: float) -> void:
 
 
 func _sync_visuals(delta: float) -> void:
-	player.sync_practice(rally, delta)
+	player.sync_practice(rally, delta, 0)
+	if is_instance_valid(partner):
+		partner.sync_practice(rally, delta, 1)
 	ball.sync_practice(rally, delta)
 	court.animate(delta)
 	hud.sync_state(rally, paused)
+
+
+func _update_players() -> void:
+	if rally.player_count == 2 and not is_instance_valid(partner):
+		partner = Athlete.new()
+		partner.name = "Partner"
+		partner.outfit_color = Color("89bbd5")
+		partner.selection_color = Color("9ee4ff")
+		$World.add_child(partner)
+	elif rally.player_count == 1 and is_instance_valid(partner):
+		partner.queue_free()
+		partner = null
+
+
+func _change_player_count(count: int) -> void:
+	_cancel_press()
+	_save_best()
+	rally.set_player_count(count)
+	_update_players()
+	_reset_round_tracking()
+	paused = false
+	_save_configuration()
+	_sync_visuals(0.0)
 
 
 func _begin_press(source: StringName, id: int, position: Vector2 = Vector2.ZERO) -> void:
@@ -223,9 +252,15 @@ func _notification(what: int) -> void:
 func _save_best() -> void:
 	if rally.best <= _saved_best:
 		return
+	_save_configuration()
+
+
+func _save_configuration() -> void:
 	var config := ConfigFile.new()
-	config.set_value("practice", "best", rally.best)
-	if config.save(SAVE_PATH) == OK:
+	config.load(save_path)
+	config.set_value("practice", "best", maxi(rally.best, int(config.get_value("practice", "best", 0))))
+	config.set_value("practice", "players", rally.player_count)
+	if config.save(save_path) == OK:
 		_saved_best = rally.best
 
 

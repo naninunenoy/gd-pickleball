@@ -93,6 +93,7 @@ func _run() -> void:
 	_check_power_release_assist()
 	_check_descending_contacts()
 	_check_swipe_trajectories()
+	_check_pair_rally()
 
 	# Exercise the real scene and input dispatch, including GUI consumption.
 	var scene = load("res://scenes/main.tscn").instantiate()
@@ -102,9 +103,10 @@ func _run() -> void:
 	_expect(scene.get_node("World").get_child_count() == 3, "world contains court, exactly one player and one ball")
 	_expect(scene.rally.phase == WallRally.Phase.READY, "scene waits for tap")
 	for control in scene.hud.find_children("*", "Control", true, false):
-		_expect(not control is BaseButton and control.mouse_filter == Control.MOUSE_FILTER_IGNORE, "HUD has no buttons or touch-blocking controls")
+		if control != scene.hud.mode_button:
+			_expect(not control is BaseButton and control.mouse_filter == Control.MOUSE_FILTER_IGNORE, "play HUD passes through all input except the idle mode selector")
 	# Header, old pause target, court, former pads and build footer all work alike.
-	for position in [Vector2(24, 40), Vector2(368, 70), Vector2(210, 480), Vector2(200, 775), Vector2(350, 775), Vector2(216, 840), Vector2(3, 400)]:
+	for position in [Vector2(24, 40), Vector2(280, 104), Vector2(210, 480), Vector2(200, 775), Vector2(350, 775), Vector2(216, 840), Vector2(3, 400)]:
 		scene.rally.reset()
 		_touch(position, true)
 		await process_frame
@@ -173,6 +175,7 @@ func _run() -> void:
 	await _check_scene_charge_controls(scene)
 	await _check_scene_swipes(scene)
 	scene.free()
+	await _check_pair_scene()
 	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
 		var handed_scene = load("res://scenes/main.tscn").instantiate()
 		handed_scene.dominant_hand = hand
@@ -209,6 +212,110 @@ func _run() -> void:
 		handed_scene.free()
 	print("check_slice: %d checks, %d failed" % [checks, failures])
 	quit(0 if failures == 0 else 1)
+
+
+func _check_pair_rally() -> void:
+	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+		var duo := WallRally.new()
+		duo.dominant_hand = hand
+		duo.set_player_count(2)
+		var lane := duo.ball_pos.x
+		duo.tap()
+		duo.advance(0.3)
+		_expect(is_equal_approx(duo.ball_pos.x, lane), "pair serve without swiping stays straight for either hand")
+		duo.reset()
+		duo.tap(Vector2.RIGHT)
+		_expect(duo.active_player == 1 and duo.last_hitter == 0 and duo.returns == 0, "rightward serve selects the closer second player without scoring")
+		var predicted := duo.receive_apex
+		duo.press()
+		duo.advance(0.8)
+		_expect(duo.active_player == 1 and duo.charging and duo.receive_apex.is_equal_approx(predicted), "receiver and prediction remain fixed through wall rebound during a hold")
+		_until_return(duo)
+		var contact := duo.ball_pos
+		duo.release(0.75, Vector2.LEFT)
+		_expect(duo.returns == 1 and duo.last_hitter == 1 and duo.active_player == 0, "leftward return selects the closer first player")
+		_expect(duo.last_contact_pos == contact and duo.ball_pos == contact, "handoff preserves the previous hitter's physical contact")
+		for hit in range(40):
+			_until_return(duo)
+			_expect(duo.can_return(), "automatic receiver reaches aimed balls throughout a fast pair rally")
+			var hitter := duo.active_player
+			duo.press()
+			duo.release(0.75, Vector2.RIGHT if hit % 2 == 0 else Vector2.LEFT)
+			_expect(duo.last_hitter == hitter, "return belongs to the receiving player before switching")
+		_expect(duo.returns == 41 and is_equal_approx(duo.pace(), 0.72), "pair mode sustains maximum-speed rallies for either hand")
+		duo.press()
+		duo.set_player_count(1)
+		_expect(duo.player_count == 1 and duo.active_player == 0 and not duo.charging and not duo.has_queued_shot(), "mode change clears holds and pending shots and restores solo")
+		_expect(duo.returns == 0 and duo.best == 41 and duo.dominant_hand == hand, "mode change preserves best and handedness")
+	var straight := WallRally.new()
+	straight.set_player_count(2)
+	straight.tap()
+	_expect(straight.active_player == 0, "straight serve may select the same player again")
+	_until_return(straight)
+	straight.tap()
+	_expect(straight.last_hitter == 0 and straight.active_player == 0, "pair play follows the course rather than compulsory alternation")
+	straight.set_player_count(2)
+	straight.tap(Vector2.RIGHT)
+	straight.advance(0.72 + 0.92 + 1.12 * 0.75)
+	straight.tap()
+	_expect(straight.returns == 1 and straight.last_hitter == 1 and straight.active_player == 1, "selected partner can return a falling ball and remain the receiver on a straight shot")
+
+
+func _check_pair_scene() -> void:
+	var path := "user://pair_check_%d.cfg" % Time.get_ticks_msec()
+	var pair = load("res://scenes/main.tscn").instantiate()
+	pair.save_path = path
+	root.add_child(pair)
+	await process_frame
+	pair.set_process(false)
+	_touch(Vector2(350, 64), true)
+	await process_frame
+	_touch(Vector2(350, 64), false)
+	await process_frame
+	_expect(pair.rally.player_count == 2 and is_instance_valid(pair.partner) and pair.rally.phase == WallRally.Phase.READY and not pair.rally.charging, "idle mode selector adds the partner without serving")
+	_expect(pair.player._id_label.text == "P1" and pair.partner._id_label.text == "P2" and pair.player._id_label.visible and pair.partner._id_label.visible, "two-player identities are visible on both athletes")
+	_mouse(Vector2(350, 64))
+	await process_frame
+	_expect(pair.rally.player_count == 2 and pair.rally.phase == WallRally.Phase.READY, "synthetic mouse cannot toggle mode a second time")
+	var persisted := ConfigFile.new()
+	persisted.load(path)
+	_expect(int(persisted.get_value("practice", "players", 0)) == 2, "chosen player count is saved")
+	_touch(Vector2(216, 480), true)
+	await process_frame
+	pair._press_started_msec = Time.get_ticks_msec() - 50
+	var serve: Vector3 = pair.rally.ball_pos
+	_touch(Vector2(316, 480), false)
+	await process_frame
+	pair._sync_visuals(0.0)
+	_expect(pair.rally.active_player == 1 and not pair.hud.mode_button.visible and pair.hud._mode_status.text.contains("P2 TO HIT"), "rightward touch serve selects and identifies P2 while hiding mode controls")
+	_expect(pair.player.paddle_contact_position().distance_to(serve) < 0.001 and not pair.player._selection_ring.visible and pair.partner._selection_ring.visible, "P1 keeps the serve swing while P2 receives the selection ring")
+	pair.rally.advance(0.72 + 0.92 + 1.12 * 0.65)
+	_touch(Vector2(216, 480), true)
+	await process_frame
+	pair._press_started_msec -= 750
+	var contact: Vector3 = pair.rally.ball_pos
+	_touch(Vector2(116, 480), false)
+	await process_frame
+	pair._sync_visuals(0.0)
+	_expect(pair.rally.last_hitter == 1 and pair.rally.active_player == 0 and pair.rally.returns == 1, "held P2 leftward return hands the next ball to P1 exactly once")
+	_expect(pair.partner.paddle_contact_position().distance_to(contact) < 0.001 and pair.player._selection_ring.visible and not pair.partner._selection_ring.visible, "P2 swing stays at actual contact after P1 becomes active")
+	pair._toggle_pause()
+	pair._sync_visuals(0.0)
+	_touch(Vector2(350, 64), true)
+	await process_frame
+	_touch(Vector2(350, 64), false)
+	await process_frame
+	_expect(pair.rally.player_count == 1 and not is_instance_valid(pair.partner) and pair.rally.phase == WallRally.Phase.READY and not pair.rally.charging, "paused mode selection restores solo without swinging")
+	pair._change_player_count(2)
+	var record: int = pair.rally.best
+	pair.free()
+	var restored = load("res://scenes/main.tscn").instantiate()
+	restored.save_path = path
+	root.add_child(restored)
+	await process_frame
+	_expect(restored.rally.player_count == 2 and is_instance_valid(restored.partner) and restored.rally.best == record, "reopening restores pair preference and best record")
+	restored.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 
 func _check_swipe_trajectories() -> void:

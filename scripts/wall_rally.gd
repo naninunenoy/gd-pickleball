@@ -28,6 +28,11 @@ const SWIPE_HEIGHT_REACH := 1.4
 
 var phase: Phase = Phase.READY
 var dominant_hand: Hand = Hand.RIGHT
+var player_count := 1
+var active_player := 0
+var last_hitter := 0
+var _player_positions: Array[Vector3] = [Vector3(WIDTH * 0.5, 0.0, PLAYER_Z), Vector3(9.0, 0.0, PLAYER_Z)]
+var _paddle_heights: Array[float] = [CONTACT_HEIGHT, CONTACT_HEIGHT]
 var returns := 0
 var best := 0
 var starting_best := 0
@@ -35,8 +40,16 @@ var wall_hits := 0
 var bounces := 0
 var phase_time := 0.0
 var ball_pos := Vector3(WIDTH * 0.5 + PADDLE_SIDE, CONTACT_HEIGHT, PLAYER_Z - PADDLE_FORWARD)
-var player_pos := Vector3(WIDTH * 0.5, 0.0, PLAYER_Z)
-var paddle_height := CONTACT_HEIGHT
+var player_pos: Vector3:
+	get:
+		return _player_positions[active_player]
+	set(value):
+		_player_positions[active_player] = value
+var paddle_height: float:
+	get:
+		return _paddle_heights[active_player]
+	set(value):
+		_paddle_heights[active_player] = value
 var last_contact_pos := ball_pos
 var contact_age := 1.0
 var target_x := WIDTH * 0.5
@@ -64,8 +77,11 @@ func reset() -> void:
 	wall_hits = 0
 	bounces = 0
 	phase_time = 0.0
-	player_pos = Vector3(WIDTH * 0.5, 0.0, PLAYER_Z)
-	paddle_height = CONTACT_HEIGHT
+	active_player = 0
+	last_hitter = 0
+	_player_positions[0] = Vector3(_home_x(0) if player_count == 2 else WIDTH * 0.5, 0.0, PLAYER_Z)
+	_player_positions[1] = Vector3(_home_x(1), 0.0, PLAYER_Z)
+	_paddle_heights.fill(CONTACT_HEIGHT)
 	target_x = paddle_position().x
 	receive_apex = trajectory_apex(Vector3(target_x, 0.0, BOUNCE_Z), Vector3(target_x, 0.0, LENGTH), BOUNCE_APEX)
 	cancel_charge()
@@ -82,8 +98,18 @@ func hand_side() -> float:
 	return 1.0 if dominant_hand == Hand.RIGHT else -1.0
 
 
-func paddle_position() -> Vector3:
-	return player_pos + Vector3(hand_side() * PADDLE_SIDE, paddle_height, -PADDLE_FORWARD)
+func set_player_count(count: int) -> void:
+	player_count = clampi(count, 1, 2)
+	reset()
+
+
+func player_position(index: int) -> Vector3:
+	return _player_positions[index]
+
+
+func paddle_position(index: int = -1) -> Vector3:
+	var selected := active_player if index < 0 else index
+	return _player_positions[selected] + Vector3(hand_side() * PADDLE_SIDE, _paddle_heights[selected], -PADDLE_FORWARD)
 
 
 static func trajectory_apex(start: Vector3, end: Vector3, arc_height: float) -> Vector3:
@@ -95,7 +121,15 @@ static func trajectory_apex(start: Vector3, end: Vector3, arc_height: float) -> 
 	return highest
 
 
-func movement_target() -> Vector3:
+func movement_target(index: int = -1) -> Vector3:
+	var selected := active_player if index < 0 else index
+	if player_count == 2:
+		if phase == Phase.READY or phase == Phase.MISSED:
+			return _player_positions[selected]
+		if selected != active_player:
+			# Leave the receiving lane open, with a separate waiting depth.
+			return Vector3(_home_x(selected), 0.0, PLAYER_Z + 2.6)
+		return _feet_for_apex(receive_apex)
 	# Keep the prepared stance until the next wall rebound supplies a new apex.
 	if wall_hits > 0:
 		return Vector3(receive_apex.x - hand_side() * PADDLE_SIDE, 0.0, receive_apex.z + PADDLE_FORWARD)
@@ -103,12 +137,38 @@ func movement_target() -> Vector3:
 
 
 func _move_to_contact(step: float) -> void:
-	var height := CONTACT_HEIGHT
-	if phase == Phase.RETURNING or phase == Phase.BOUNCED:
-		# Prepare at the predicted apex; do not chase the live ball after bouncing.
-		height = clampf(receive_apex.y, 1.0, 3.0)
-	player_pos = player_pos.move_toward(movement_target(), MOVE_SPEED * step)
-	paddle_height = move_toward(paddle_height, height, 12.0 * step)
+	for index in range(player_count):
+		var height := CONTACT_HEIGHT
+		if index == active_player and (phase == Phase.RETURNING or phase == Phase.BOUNCED):
+			# Prepare at the predicted apex; do not chase the falling ball.
+			height = clampf(receive_apex.y, 1.0, 3.0)
+		_player_positions[index] = _player_positions[index].move_toward(movement_target(index), MOVE_SPEED * step)
+		_paddle_heights[index] = move_toward(_paddle_heights[index], height, 12.0 * step)
+
+
+func _feet_for_apex(apex: Vector3) -> Vector3:
+	return Vector3(apex.x - hand_side() * PADDLE_SIDE, 0.0, apex.z + PADDLE_FORWARD)
+
+
+func _home_x(index: int) -> float:
+	# Home racket lanes stay inside the court for either striking hand.
+	return (3.0 if index == 0 else 9.0) - hand_side() * PADDLE_SIDE
+
+
+func _predict_rebound() -> void:
+	var slope := (_to.x - _from.x) / maxf(_from.z - _to.z, 0.1)
+	target_x = clampf(_to.x + slope * (BOUNCE_Z - _to.z), 2.0, WIDTH - 2.0)
+	receive_apex = trajectory_apex(Vector3(target_x, 0.0, BOUNCE_Z), Vector3(target_x, 0.0, LENGTH), BOUNCE_APEX)
+
+
+func _select_receiver() -> void:
+	var goal := _feet_for_apex(receive_apex)
+	var best_time := _player_positions[active_player].distance_to(goal) / MOVE_SPEED
+	for index in range(player_count):
+		var arrival := _player_positions[index].distance_to(goal) / MOVE_SPEED
+		if arrival < best_time - 0.0001:
+			active_player = index
+			best_time = arrival
 
 
 func pace() -> float:
@@ -244,6 +304,7 @@ func _launch(power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	bounces = 0
 	last_feedback = "To the wall"
 	last_contact_pos = ball_pos
+	last_hitter = active_player
 	contact_age = 0.0
 	shot_charge = clampf(power, 0.0, 1.0)
 	shot_speed = lerpf(1.0, MAX_SHOT_SPEED, shot_charge)
@@ -254,6 +315,10 @@ func _launch(power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	var wall_x := clampf(ball_pos.x + shot_aim.x * SWIPE_LATERAL_REACH, 2.0, WIDTH - 2.0)
 	var wall_height := 3.4 - shot_aim.y * SWIPE_HEIGHT_REACH
 	_segment(Phase.OUTBOUND, Vector3(wall_x, wall_height, 0.2), 0.72 * pace() / shot_speed, 0.55)
+	if player_count == 2:
+		# Decide once per successful shot, early enough to charge the next one.
+		_predict_rebound()
+		_select_receiver()
 
 
 func _return_ball() -> void:
@@ -268,10 +333,7 @@ func _finish_segment() -> void:
 	match phase:
 		Phase.OUTBOUND:
 			wall_hits += 1
-			# Reflect the forward component at the wall; keep lateral direction.
-			var slope := (ball_pos.x - _from.x) / maxf(_from.z - ball_pos.z, 0.1)
-			target_x = clampf(ball_pos.x + slope * (BOUNCE_Z - ball_pos.z), 2.0, WIDTH - 2.0)
-			receive_apex = trajectory_apex(Vector3(target_x, 0.0, BOUNCE_Z), Vector3(target_x, 0.0, LENGTH), BOUNCE_APEX)
+			_predict_rebound()
 			_segment(Phase.RETURNING, Vector3(target_x, 0.0, BOUNCE_Z), 0.92 * pace() / shot_speed, 0.8)
 			last_feedback = "Let it bounce"
 		Phase.RETURNING:
