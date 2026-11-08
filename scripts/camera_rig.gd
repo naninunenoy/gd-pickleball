@@ -17,7 +17,7 @@ func _ready() -> void:
 
 
 func set_volley_mode(enabled: bool) -> void:
-	camera.position = Vector3(6.0, 4.2, 20.8) if enabled else Vector3(6.0, 16.0, 34.5)
+	camera.position = Vector3(6.0, 5.4, 20.8) if enabled else Vector3(6.0, 16.0, 34.5)
 	camera.look_at(Vector3(6.0, VolleyRally.VOLLEY_HEIGHT, 4.7) if enabled else Vector3(6.0, 1.0, 12.0))
 	camera.fov = FIRST_PERSON_FOV if enabled else 46.0
 	_first_person.visible = enabled
@@ -29,8 +29,7 @@ func sync_volley(rally: WallRally) -> void:
 		return
 	var side := rally.hand_side()
 	var resting := Vector3(PADDLE_REST.x * side, PADDLE_REST.y, PADDLE_REST.z)
-	var recovery_time := lerpf(0.24, 0.17, rally.shot_charge)
-	var recovery := clampf(rally.contact_age / recovery_time, 0.0, 1.0) if rally.last_hitter == 0 else 1.0
+	var recovery := clampf(rally.contact_age / 0.17, 0.0, 1.0) if rally.last_hitter == 0 else 1.0
 	var contact := camera.to_local(rally.last_contact_pos)
 	var swing := Vector3(0.0, -0.35, -1.4)
 	if contact.z < -0.1:

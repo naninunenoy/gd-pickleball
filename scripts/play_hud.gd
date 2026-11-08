@@ -186,7 +186,7 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 	_reticle.modulate = LIME if rally.can_return() else Color(1.0, 1.0, 1.0, 0.55)
 	_title.text = "Volley rally" if _displayed_volley else "Wall rally"
 	_score_caption.text = "VOLLEYS" if _displayed_volley else "RALLY"
-	_gesture_hint.text = "Tap: normal  /  Hold: power  /  Swipe: aim" if _displayed_volley else "Swipe to aim  /  Hold for power"
+	_gesture_hint.text = "Tap to hit  /  Swipe up: lift  /  Down: drive" if _displayed_volley else "Swipe to aim  /  Hold for power"
 	_displayed_count = rally.player_count
 	var may_change := (rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED or paused) and not rally.charging
 	mode_button.visible = may_change and not _displayed_volley
@@ -248,11 +248,11 @@ func _sync_volley(rally: WallRally, paused: bool) -> void:
 		_message.text = "Take a breath."
 		_hint.text = "Tap anywhere to resume."
 	elif rally.charging:
-		_message.text = "Power %d%%" % int(round(rally.charge_fraction() * 100.0)) if rally.charge_time >= WallRally.MIN_POWER_HOLD else "Ready to hit."
-		_hint.text = "Release to hit. Swipe for direction."
+		_message.text = "Release to hit."
+		_hint.text = "Swipe up to lift, down to drive."
 	elif rally.phase == WallRally.Phase.READY:
 		_message.text = "Ready to volley?"
-		_hint.text = "Tap or swipe to start. Hold for power."
+		_hint.text = "Tap or swipe anywhere to start."
 	elif rally.phase == WallRally.Phase.MISSED:
 		_message.text = "The ball passed."
 		_hint.text = "Tap anywhere to try again."
@@ -264,7 +264,7 @@ func _sync_volley(rally: WallRally, paused: bool) -> void:
 		_hint.text = "Your opponent returns automatically."
 	elif rally.can_tap():
 		_message.text = "Tap to volley!"
-		_hint.text = "Tap or swipe. Hold for optional power."
+		_hint.text = "Tap or swipe. No hold needed."
 	else:
 		_message.text = "Here it comes."
 		_hint.text = "Tap as the ball approaches."

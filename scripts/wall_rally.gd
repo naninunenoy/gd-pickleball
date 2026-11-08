@@ -11,6 +11,9 @@ const PLAYER_Z := 18.8
 const CONTACT_HEIGHT := 2.2
 const PADDLE_SIDE := 1.15
 const PADDLE_FORWARD := 1.1
+const WALL_Z := 0.2
+const OUTBOUND_TIME := 0.72
+const NORMAL_BALL_SPEED := (PLAYER_Z - PADDLE_FORWARD - WALL_Z) / OUTBOUND_TIME
 const CONTACT_RADIUS := 0.42
 const POWER_CONTACT_RADIUS := 1.8
 const DESCENDING_CONTACT_REACH := 3.0
@@ -325,7 +328,7 @@ func _launch(power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	_pending_aim = Vector2.ZERO
 	var wall_x := clampf(ball_pos.x + shot_aim.x * SWIPE_LATERAL_REACH, 2.0, WIDTH - 2.0)
 	var wall_height := 3.4 - shot_aim.y * SWIPE_HEIGHT_REACH
-	_segment(Phase.OUTBOUND, Vector3(wall_x, wall_height, 0.2), 0.72 * pace() / shot_speed, 0.55)
+	_segment(Phase.OUTBOUND, Vector3(wall_x, wall_height, WALL_Z), OUTBOUND_TIME * pace() / shot_speed, 0.55)
 	if player_count == 2:
 		# Assign input once per shot; both players recover home until wall impact.
 		_predict_rebound()

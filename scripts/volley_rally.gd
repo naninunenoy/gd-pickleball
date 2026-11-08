@@ -1,17 +1,20 @@
 class_name VolleyRally
 extends WallRally
 
-## Aimed normal/charged volleys against an automatic opponent. No ground bounce.
+## Tap/swipe volleys at wall-practice speed. No hold power or ground bounce.
 const NET_Z := 11.5
 const NET_HEIGHT := 2.85
-const VOLLEY_HEIGHT := 3.2
-const FLIGHT_TIME := 1.4
+const VOLLEY_HEIGHT := 4.4
 const VOLLEY_REACH := 2.8
 const INCOMING_END_Z := 19.4
-const LATE_RELEASE_GRACE := MIN_POWER_HOLD
+const LATE_RELEASE_GRACE := 0.2
 const AIM_LATERAL_REACH := 4.0
-const HIGH_TARGET := 4.6
-const LOW_TARGET := 3.0
+const UP_ANGLE := 12.0
+const DOWN_ANGLE := -5.0
+const NORMAL_ANGLE := 4.0
+const VERTICAL_AIM_THRESHOLD := 0.3
+const GRAVITY := 8.0
+const NET_CLEARANCE := 0.25
 
 var opponent_returns := 0
 var _return_queued := false
@@ -50,8 +53,8 @@ func movement_target(index: int = -1) -> Vector3:
 	return _player_positions[0]
 
 
-func pace() -> float:
-	return 1.0 # Incoming volleys keep a fixed, predictable rhythm.
+func flight_time(start: Vector3, end: Vector3) -> float:
+	return Vector2(end.x - start.x, end.z - start.z).length() / NORMAL_BALL_SPEED * pace()
 
 
 func can_return() -> bool:
@@ -86,25 +89,24 @@ func press() -> void:
 	super.press()
 
 
-func release(held_seconds: float = -1.0, aim: Vector2 = Vector2.ZERO) -> void:
+func release(_held_seconds: float = -1.0, aim: Vector2 = Vector2.ZERO) -> void:
 	if not charging:
 		return
-	var power := charge_fraction() if held_seconds < 0.0 else clampf(held_seconds / MAX_CHARGE_TIME, 0.0, 1.0)
 	cancel_charge()
-	_request_shot(power, aim, true)
+	_request_shot(aim)
 
 
 func tap(aim: Vector2 = Vector2.ZERO) -> void:
 	if not charging:
-		_request_shot(0.0, aim)
+		_request_shot(aim)
 
 
-func _request_shot(power: float, aim: Vector2, hold_release: bool = false) -> void:
+func _request_shot(aim: Vector2) -> void:
 	if phase == Phase.READY or phase == Phase.MISSED:
 		reset()
-		_launch(power, aim)
-	elif phase == Phase.RETURNING or (phase == Phase.OUTBOUND and hold_release):
-		_pending_charge = power
+		_launch(0.0, aim)
+	elif phase == Phase.RETURNING or phase == Phase.OUTBOUND:
+		_pending_charge = 0.0
 		_pending_aim = aim
 		if can_return():
 			_return_ball()
@@ -113,26 +115,37 @@ func _request_shot(power: float, aim: Vector2, hold_release: bool = false) -> vo
 			last_feedback = "Ready to volley"
 
 
-func _launch(power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
+func _launch(_power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	cancel_charge()
 	active_player = 0
 	last_hitter = 0
 	last_contact_pos = ball_pos
 	contact_age = 0.0
-	shot_charge = clampf(power, 0.0, 1.0)
-	shot_speed = lerpf(1.0, MAX_SHOT_SPEED, shot_charge)
+	shot_charge = 0.0
+	shot_speed = 1.0
 	shot_aim = aim.normalized()
-	var height := lerpf(VOLLEY_HEIGHT, HIGH_TARGET, -shot_aim.y) if shot_aim.y < 0.0 else lerpf(VOLLEY_HEIGHT, LOW_TARGET, shot_aim.y)
-	_opponent_target = Vector3(clampf(ball_pos.x + shot_aim.x * AIM_LATERAL_REACH, 2.0, 10.0), height, paddle_position(1).z)
+	_opponent_target = Vector3(clampf(ball_pos.x + shot_aim.x * AIM_LATERAL_REACH, 2.0, 10.0), 0.0, paddle_position(1).z)
+	var duration := flight_time(ball_pos, _opponent_target)
+	var distance := Vector2(_opponent_target.x - ball_pos.x, _opponent_target.z - ball_pos.z).length()
+	var angle := NORMAL_ANGLE
+	if shot_aim.y < -VERTICAL_AIM_THRESHOLD:
+		angle = UP_ANGLE
+	elif shot_aim.y > VERTICAL_AIM_THRESHOLD:
+		angle = DOWN_ANGLE
+	# Aim sets launch slope, not a height on the opponent's side. The net
+	# limits a low downward stroke while keeping its initial slope negative.
+	var net_progress := (ball_pos.z - NET_Z) / (ball_pos.z - _opponent_target.z)
+	var net_time := duration * net_progress
+	var minimum_slope := (NET_HEIGHT + NET_CLEARANCE - ball_pos.y + 0.5 * GRAVITY * net_time * net_time) / (distance * net_progress)
+	var slope := maxf(tan(deg_to_rad(angle)), minimum_slope)
+	_opponent_target.y = ball_pos.y + slope * distance - 0.5 * GRAVITY * duration * duration
 	last_feedback = "To your opponent"
-	_segment(Phase.OUTBOUND, _opponent_target, FLIGHT_TIME / shot_speed, 0.4)
+	_segment(Phase.OUTBOUND, _opponent_target, duration, GRAVITY * duration * duration / 8.0)
 
 
 func advance(delta: float) -> void:
 	var remaining := maxf(delta, 0.0)
 	if phase == Phase.READY or phase == Phase.MISSED:
-		if charging:
-			charge_time = minf(MAX_CHARGE_TIME, charge_time + remaining)
 		return
 	while remaining > 0.000001 and phase != Phase.READY and phase != Phase.MISSED:
 		var step := minf(remaining, 1.0 / 120.0)
@@ -143,8 +156,6 @@ func advance(delta: float) -> void:
 		remaining -= step
 		phase_time += step
 		contact_age += step
-		if charging:
-			charge_time = minf(MAX_CHARGE_TIME, charge_time + step)
 		_player_positions[1] = _player_positions[1].move_toward(movement_target(1), MOVE_SPEED * step)
 		var height := _opponent_target.y if phase == Phase.OUTBOUND else VOLLEY_HEIGHT
 		_paddle_heights[1] = move_toward(_paddle_heights[1], height, 12.0 * step)
@@ -161,11 +172,14 @@ func advance(delta: float) -> void:
 				last_contact_pos = ball_pos
 				contact_age = 0.0
 				last_feedback = "Opponent returns"
-				# The CPU softens the return so stronger player shots stay readable.
 				shot_charge = 0.0
 				shot_speed = 1.0
 				shot_aim = Vector2.ZERO
-				_segment(Phase.RETURNING, Vector3(6.0, VOLLEY_HEIGHT, INCOMING_END_Z), FLIGHT_TIME * pace(), 0.4)
+				var target := Vector3(6.0, VOLLEY_HEIGHT, INCOMING_END_Z)
+				var net_progress := (NET_Z - ball_pos.z) / (target.z - ball_pos.z)
+				var net_height := lerpf(ball_pos.y, target.y, net_progress)
+				var arc := maxf(0.4, (NET_HEIGHT + NET_CLEARANCE - net_height) / (4.0 * net_progress * (1.0 - net_progress)))
+				_segment(Phase.RETURNING, target, flight_time(ball_pos, target), arc)
 			else:
 				if charging and phase_time < segment_end - 0.000001:
 					continue

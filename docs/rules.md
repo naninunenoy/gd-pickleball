@@ -8,16 +8,14 @@ The left header selector switches **WALL RALLY / VOLLEY RALLY** before play, aft
 
 ## 1v1 volley rally
 
-- You play from a first-person viewpoint on the near side of a net; one automatic opponent faces you from the far side. Your racket appears in the foreground and a small center marker indicates when the ball is in reach.
-- Tap anywhere to start or return at normal speed when you lift your finger. A still tap stays straight. Every shot clears the net without a ground bounce.
-- Swipe before releasing to aim left/right or higher/lower. Diagonal swipes combine both; an arrow previews the direction. Small finger movements are ignored.
-- Hold for at least 0.2 seconds for optional power, capped at 0.75 seconds and 1.6x speed. Start holding even outside racket range, then release to hit. Nothing fires on press; one gesture selects one normal or strong shot.
-- An early strong release keeps its selected speed and direction until the ball reaches your racket, including when released before the opponent hits. The opponent moves to intercept aimed shots and returns at the normal 1.4-second pace toward your side.
-- Tap at any point after the opponent returns the ball. An early tap stays queued for that incoming ball until it reaches your racket. The rhythm is a little slower and the contact area is wider; late balls remain visible near your side. One tap returns one ball. Taps while your own shot travels toward the opponent do not hit again.
-- Pressing just before the ball passes gives you up to 0.2 seconds to release. The ball stays visible at the endpoint during this short grace; holding longer still misses.
-- The opponent volleys automatically from its own racket. Your successful returns count toward the volley record; the opening shot does not count.
-- If a return passes you, the rally ends. Tap to restart, or use the header selector to return to wall practice.
-- This mode has one player versus one automatic opponent. The wall practice player-count selector is hidden here.
+- Play from a first-person viewpoint against one automatic opponent. Your racket appears in the foreground; the center marker indicates when the ball is in reach.
+- Tap anywhere to start or return when you lift your finger. A still tap stays in the same lateral lane. There is no hold power; gesture duration never adds speed.
+- Swipe left/right to choose the side. Swipe up to launch upward or down to launch downward. Diagonal swipes combine side and stroke. An arrow previews the swipe, and small finger movement is ignored.
+- Ball speed follows normal wall practice, including its gradual acceleration. Initial flights take roughly 0.56–0.61 seconds. The prepared contact is higher so downward strokes can clear the net, and the opponent moves to meet each course.
+- A released tap or swipe can wait for the next incoming ball, even when entered during your outgoing flight. It is consumed once when the ball enters racket reach. Pressing never hits automatically.
+- A press just before the ball passes gives up to 0.2 seconds to release. The ball stays visible at the endpoint during this grace; holding longer still misses.
+- The opponent volleys automatically. Your successful returns count toward the separate volley record; serving does not count. There is no ground bounce.
+- Tap after a miss to restart, or use the header selector to return to wall practice. The wall player-count selector is hidden in this 1v1 mode.
 
 ## Wall practice taps and holds
 
