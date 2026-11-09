@@ -75,12 +75,12 @@ func _process(delta: float) -> void:
 
 func _sync_visuals(delta: float) -> void:
 	player.sync_practice(rally, delta, 0)
-	player.visible = not volley_mode or rally.active_player != 0
+	player.visible = not volley_mode
 	if is_instance_valid(partner):
 		partner.sync_practice(rally, delta, rally.opponent_index() if volley_mode else 1)
 	if is_instance_valid(volley_partner):
 		volley_partner.sync_practice(rally, delta, 1)
-		volley_partner.visible = rally.active_player != 1
+		volley_partner.visible = false
 	if is_instance_valid(opponent_partner):
 		opponent_partner.sync_practice(rally, delta, rally.opponent_index(1))
 	ball.sync_practice(rally, delta)

@@ -41,6 +41,7 @@ func sync_practice(rally: WallRally, delta: float) -> void:
 	_landing.position = Vector3(rally.receive_apex.x, 0.055, rally.receive_apex.z)
 	var volley := rally as VolleyRally
 	if volley != null:
+		_sphere.scale = Vector3.ONE * (0.65 if rally.player_count == 2 else 0.4)
 		_landing.visible = volley.dink_shot and rally.phase != WallRally.Phase.READY and rally.phase != WallRally.Phase.MISSED
 		_landing.position = Vector3(volley.dink_landing.x, 0.12, volley.dink_landing.z)
 	_landing.scale = Vector3.ONE * (1.05 if rally.can_return() else 0.8)

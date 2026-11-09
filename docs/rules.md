@@ -19,7 +19,7 @@ The left header selector switches **WALL RALLY / VOLLEY RALLY** before play, aft
 - Unbounced volleys require the player's feet outside the kitchen, including its boundary line. Bounced balls may be struck inside it. After a hit, recover toward the line.
 - Opponents return automatically. Your successful returns count toward the separate volley record; serving and ground bounces do not count.
 - In doubles, P1 covers the left half and P2 the right. The course selects the far-side CPU receiver. Opponents return crosscourt, and the resulting near-side course selects P1 or P2; central balls are yielded to the partner. Selection follows the course rather than a hit counter.
-- After a hit, return toward your own home lane. Only the receiving athlete approaches the next ball; the partner stays in their own half. The camera moves to the receiver's first-person view automatically and the header names P1/P2 TO HIT. No player-switch button is needed.
+- After a hit, return toward your own home lane. Only the receiving athlete approaches the next ball; the partner stays in their own half. The camera stays centered and shows both lanes while the header names P1/P2 TO HIT. Receiver changes and retry taps do not shift the view sideways. No player-switch button is needed.
 - Tap after a miss to restart, or use the header selector to return to wall practice. Singles/doubles and wall player count are remembered independently; singles and doubles share the volley personal best.
 
 ## Wall practice taps and holds

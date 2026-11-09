@@ -537,12 +537,16 @@ func _check_volley_doubles_scene() -> void:
 	_expect(scene.rally.player_count == 2 and scene.rally.phase == WallRally.Phase.READY and scene.hud.mode_button.text.contains("DOUBLES"), "volley selector enters doubles without hitting a serve")
 	_expect(is_instance_valid(scene.volley_partner) and is_instance_valid(scene.opponent_partner) and scene.partner._id_label.text == "CPU 1" and scene.opponent_partner._id_label.text == "CPU 2", "doubles renders two opponents and a distinct near teammate")
 	var rig: CameraRig = scene.get_node("CameraRig")
-	_expect(not scene.player.visible and scene.volley_partner.visible and is_equal_approx(rig.camera.position.x, 3.0), "doubles starts in P1's first-person view with the teammate body enabled")
+	_expect(not scene.player.visible and not scene.volley_partner.visible and is_equal_approx(rig.camera.position.x, 6.0) and is_equal_approx(rig.camera.position.z, CameraRig.DOUBLES_EYE_Z), "doubles starts in a shared central view without near bodies blocking the ball")
+	_expect(is_equal_approx(rig.camera.fov, CameraRig.DOUBLES_FOV), "doubles framing covers both receiving lanes")
+	for lane in [2.0, 3.0, 6.0, 9.0, 10.0]:
+		for depth in [15.5, 18.3, VolleyRally.INCOMING_END_Z]:
+			_expect(root.get_visible_rect().has_point(rig.camera.unproject_position(Vector3(lane, VolleyRally.VOLLEY_HEIGHT, depth))), "wide and late doubles contacts stay visible from the fixed camera")
 	scene.rally.tap()
 	scene.rally.advance(scene.rally._duration)
 	scene._sync_visuals(0.1)
-	_expect(scene.rally.active_player == 1 and scene.player.visible and not scene.volley_partner.visible and scene.hud._mode_status.text.contains("P2 TO HIT"), "the crosscourt return changes control and body visibility to P2")
-	_expect(rig.camera.position.x > 3.0 and rig.camera.position.x < 9.0, "FPS camera moves toward the receiver without an instant side jump")
+	_expect(scene.rally.active_player == 1 and not scene.player.visible and not scene.volley_partner.visible and scene.hud._mode_status.text.contains("P2 TO HIT"), "the crosscourt return changes control to P2 without popping a near body into view")
+	_expect(is_equal_approx(rig.camera.position.x, 6.0), "receiver handoff leaves the camera centered")
 	_touch(Vector2(216, 480), true)
 	await process_frame
 	scene._press_started_msec = Time.get_ticks_msec() - 50
@@ -554,10 +558,21 @@ func _check_volley_doubles_scene() -> void:
 			break
 		scene.rally.advance(1.0 / 60.0)
 		scene._sync_visuals(1.0 / 60.0)
+		_expect(is_equal_approx(rig.camera.position.x, 6.0), "tap and receiver changes never move the doubles view sideways")
 		var projected := rig.camera.unproject_position(scene.rally.ball_pos)
 		_expect(root.get_visible_rect().has_point(projected), "incoming ball stays on screen throughout the FPS doubles handoff")
-	_expect(scene.rally.returns == 1 and scene.rally.last_hitter == 1 and rig._view_paddle.position.x < CameraRig.PADDLE_REST.x, "P2 gets one returned volley with first-person racket feedback")
+	var paddle_screen := rig.camera.unproject_position(rig._view_paddle.global_position)
+	var contact_screen := rig.camera.unproject_position(scene.rally.last_contact_pos)
+	_expect(scene.rally.returns == 1 and scene.rally.last_hitter == 1 and paddle_screen.distance_to(contact_screen) < 60.0, "P2's foreground racket reaches the real contact in the fixed view")
 	_expect(is_equal_approx(scene.partner._body.rotation.y, PI) and is_equal_approx(scene.opponent_partner._body.rotation.y, PI), "both opponents face the near team")
+	scene.rally.advance(10.0)
+	_touch(Vector2(216, 480), true)
+	await process_frame
+	scene._press_started_msec = Time.get_ticks_msec() - 50
+	_touch(Vector2(216, 480), false)
+	await process_frame
+	scene._sync_visuals(1.0 / 60.0)
+	_expect(scene.rally.phase == WallRally.Phase.OUTBOUND and scene.rally.active_player == 0 and is_equal_approx(rig.camera.position.x, 6.0), "retry tap resets to P1 without a right-to-left camera jump")
 	scene._toggle_pause()
 	scene._sync_visuals(0.0)
 	_touch(Vector2(350, 64), true)
@@ -602,6 +617,16 @@ func _check_dink_scene() -> void:
 	await process_frame
 	_expect(scene.rally.dink_shot and scene.rally.returns == 0, "short real touch gesture serves a dink without a shot button")
 	var rig: CameraRig = scene.get_node("CameraRig")
+	var pitch_before := rig.camera.rotation.x
+	scene._sync_visuals(1.0 / 60.0)
+	_expect(absf(rig.camera.rotation.x - pitch_before) <= CameraRig.LOOK_SPEED / 60.0 + 0.00001, "starting a dink eases the camera pitch instead of snapping it")
+	var frozen_pose := rig.camera.transform
+	scene._sync_visuals(0.0)
+	_expect(rig.camera.transform.is_equal_approx(frozen_pose), "zero-time HUD refresh never teleports the camera")
+	scene._toggle_pause()
+	scene._process(0.25)
+	_expect(rig.camera.transform.is_equal_approx(frozen_pose), "pausing freezes the current camera pose")
+	scene._toggle_pause()
 	var saw_bounce := false
 	var stays_visible := true
 	var early_hit := false
@@ -626,7 +651,7 @@ func _check_dink_scene() -> void:
 		var point := rig.camera.unproject_position(scene.rally.ball_pos)
 		stays_visible = stays_visible and root.get_visible_rect().has_point(point)
 	_expect(queued and saw_bounce and not early_hit and scene.rally.returns == 1 and scene.rally.last_hitter == 1, "early whole-screen tap waits for P2's kitchen bounce and returns once")
-	_expect(stays_visible and rig.camera.position.z < 20.8 and rig.camera.position.y < 5.4, "FPS camera follows the kitchen pickup and keeps the low dink visible")
+	_expect(stays_visible and rig.camera.position.z < CameraRig.DOUBLES_EYE_Z and rig.camera.position.y < 5.4 and is_equal_approx(rig.camera.position.x, 6.0), "kitchen pickup stays visible while the camera remains centered")
 	_touch(Vector2(216, 480), true)
 	await process_frame
 	scene._update_swipe(&"touch", 0, Vector2(336, 480))
