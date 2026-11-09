@@ -1,21 +1,23 @@
 # Wall rally rules
 
-Choose wall practice or a 1v1 volley exchange, controlled on the same phone. Play upright on a phone and try to beat your longest rally. All in-game text stays English.
+Choose wall practice or a singles/doubles volley exchange, controlled on the same phone. Play upright on a phone and try to beat your longest rally. All in-game text stays English.
 
 ## Game selection
 
-The left header selector switches **WALL RALLY / VOLLEY RALLY** before play, after a miss, or while paused. Changing game restarts the rally and cancels pending input. Your game choice, wall player count and separate best records are saved. Both selectors disappear during play, leaving the whole screen available for shots.
+The left header selector switches **WALL RALLY / VOLLEY RALLY** before play, after a miss, or while paused. Changing game restarts the rally and cancels pending input. Your game choice, separate wall/volley player counts and separate best records are saved. Both selectors disappear during play, leaving the whole screen available for shots.
 
-## 1v1 volley rally
+## Singles and doubles volley rally
 
-- Play from a first-person viewpoint against one automatic opponent. Your racket appears in the foreground; the center marker indicates when the ball is in reach.
+- Use the right selector to choose SINGLES (1v1) or DOUBLES (2v2) before play, after a miss, or while paused. Both use the same phone and full-screen input. Your racket appears in the foreground; the center marker indicates when the ball is in reach.
 - Tap anywhere to start or return when you lift your finger. A still tap stays in the same lateral lane. There is no hold power; gesture duration never adds speed.
 - Swipe left/right to choose the side. Swipe up to launch upward or down to launch downward. Diagonal swipes combine side and stroke. An arrow previews the swipe, and small finger movement is ignored.
-- Ball speed is 65% of normal wall-practice speed. Initial flights take roughly 0.86–0.93 seconds, with gentle acceleration limited to a 90% duration floor. The prepared contact is higher so downward strokes can clear the net, and the opponent moves to meet each course.
+- Ball speed is 65% of normal wall-practice speed. Initial singles flights take roughly 0.86–0.93 seconds, with gentle acceleration limited to a 90% duration floor. The prepared contact is higher so downward strokes can clear the net, and the opponent moves to meet each course.
 - A released tap or swipe can wait for the next incoming ball, even when entered during your outgoing flight. It is consumed once when the ball enters racket reach. Pressing never hits automatically.
 - A press just before the ball passes gives up to 0.2 seconds to release. The ball stays visible at the endpoint during this grace; holding longer still misses.
 - The opponent volleys automatically. Your successful returns count toward the separate volley record; serving does not count. There is no ground bounce.
-- Tap after a miss to restart, or use the header selector to return to wall practice. The wall player-count selector is hidden in this 1v1 mode.
+- In doubles, P1 covers the left half and P2 the right. The course selects the far-side CPU receiver. Opponents return crosscourt, and the resulting near-side course selects P1 or P2; central balls are yielded to the partner. Selection follows the course rather than a hit counter.
+- After a hit, return toward your own home lane. Only the receiving athlete approaches the next ball; the partner stays in their own half. The camera moves to the receiver's first-person view automatically and the header names P1/P2 TO HIT. No player-switch button is needed.
+- Tap after a miss to restart, or use the header selector to return to wall practice. Singles/doubles and wall player count are remembered independently; singles and doubles share the volley personal best.
 
 ## Wall practice taps and holds
 

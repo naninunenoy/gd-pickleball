@@ -96,6 +96,7 @@ func _run() -> void:
 	_check_pair_rally()
 	_check_pair_recovery()
 	_check_volley_rally()
+	_check_volley_doubles()
 
 	# Exercise the real scene and input dispatch, including GUI consumption.
 	var scene = load("res://scenes/main.tscn").instantiate()
@@ -182,6 +183,7 @@ func _run() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(scene_path))
 	await _check_pair_scene()
 	await _check_volley_scene()
+	await _check_volley_doubles_scene()
 	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
 		var handed_scene = load("res://scenes/main.tscn").instantiate()
 		var hand_path := "user://hand_check_%d_%d.cfg" % [int(hand), Time.get_ticks_msec()]
@@ -343,6 +345,58 @@ func _check_volley_strokes() -> void:
 	_expect(queued.phase == WallRally.Phase.MISSED and queued.returns == 1 and not queued.has_queued_shot(), "cancellation clears a queued swipe without another hit")
 
 
+func _check_volley_doubles() -> void:
+	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+		var duo := VolleyRally.new()
+		duo.dominant_hand = hand
+		duo.set_player_count(2)
+		_expect(duo.player_count == 2 and duo._player_positions.size() == 4 and duo.active_player == 0, "doubles creates two athletes on each side with P1 serving")
+		for index in range(4):
+			var lane := 3.0 if index % 2 == 0 else 9.0
+			_expect(is_equal_approx(duo.paddle_position(index).x, lane) and duo.player_position(index) == duo.home_position(index), "both hands prepare all four rackets inside their own home lanes")
+		duo.tap()
+		var near_receivers := 0
+		var far_receivers := 0
+		var directions := [Vector2.ZERO, Vector2.RIGHT, Vector2.LEFT, Vector2.UP, Vector2.DOWN, Vector2(1, -1).normalized()]
+		for hit in range(40):
+			var net_progress := (duo._from.z - VolleyRally.NET_Z) / (duo._from.z - duo._to.z)
+			duo.advance(duo._duration * net_progress)
+			_expect(duo.ball_pos.y >= VolleyRally.NET_HEIGHT + VolleyRally.NET_CLEARANCE - 0.001, "doubles strokes keep their net clearance throughout a mixed rally")
+			for index in range(2):
+				_expect(duo.movement_target(index) == duo.home_position(index), "both near athletes recover home while their shot flies out")
+			duo.advance(duo._duration - duo.phase_time)
+			var opponent := duo.last_hitter
+			far_receivers |= 1 << (opponent - 2)
+			_expect(duo.phase == WallRally.Phase.RETURNING and opponent == duo.opponent_receiver and duo.ball_pos.distance_to(duo.paddle_position(opponent)) < 0.001, "selected CPU volleys from its actual racket contact")
+			var receiver := duo.active_player
+			near_receivers |= 1 << receiver
+			var course := duo._incoming_target.x
+			_expect(absf(course - 6.0) <= WallRally.CENTER_SHARE_WIDTH or receiver == (0 if course < 6.0 else 1), "incoming course chooses the near receiver's own half")
+			_expect(duo.movement_target(1 - receiver) == duo.home_position(1 - receiver), "the nonreceiver stays in its own home lane")
+			duo.press()
+			_until_return(duo)
+			_expect(duo.can_return() and duo.active_player == receiver and duo.returns == hit, "selected receiver reaches the ball without a held gesture firing automatically")
+			var contact := duo.ball_pos
+			duo.release(1.0, directions[hit % directions.size()])
+			_expect(duo.returns == hit + 1 and duo.last_hitter == receiver and duo.last_contact_pos == contact and duo.shot_charge == 0.0, "P1 and P2 each return once at actual contact with no hold power")
+			for index in range(4):
+				var facing := -1.0 if duo.is_opponent(index) else 1.0
+				var racket_x := duo.movement_target(index).x + duo.hand_side() * WallRally.PADDLE_SIDE * facing
+				_expect(racket_x <= 6.5 if index % 2 == 0 else racket_x >= 5.5, "each doubles athlete's movement respects the partner's territory")
+		_expect(near_receivers == 3 and far_receivers == 3 and duo.best == 40 and duo.bounces == 0, "a long doubles volley uses all four athletes without bouncing")
+		duo.reset()
+		duo.tap(Vector2(0.75, -sqrt(1.0 - 0.75 * 0.75)))
+		_expect(duo.opponent_receiver == 3 and is_equal_approx(duo._opponent_target.x, 6.0), "a central course is yielded to the other CPU")
+		duo.press()
+		duo.release(0.04, Vector2.DOWN)
+		duo.advance(duo._duration)
+		_expect(duo.active_player == 1 and duo.has_queued_shot(), "central return selects P2 and preserves a swipe queued before CPU contact")
+		duo.advance(duo._duration)
+		_expect(duo.returns == 1 and duo.last_hitter == 1 and duo.shot_aim == Vector2.DOWN and not duo.has_queued_shot(), "an early swipe transfers to the chosen doubles receiver and fires once")
+		duo.set_player_count(1)
+		_expect(duo.player_count == 1 and duo.opponent_index() == 1 and duo.phase == WallRally.Phase.READY and not duo.has_queued_shot(), "switching back to singles resets actors and queued input")
+
+
 func _check_volley_scene() -> void:
 	var path := "user://volley_check_%d.cfg" % Time.get_ticks_msec()
 	var scene = load("res://scenes/main.tscn").instantiate()
@@ -357,7 +411,7 @@ func _check_volley_scene() -> void:
 	_touch(Vector2(140, 64), false)
 	await process_frame
 	_expect(scene.volley_mode and scene.rally is VolleyRally and scene.rally.player_count == 1 and scene.rally.phase == WallRally.Phase.READY, "game selector enters fixed 1v1 volley without serving")
-	_expect(is_instance_valid(scene.partner) and scene.court._volley_root.visible and not scene.court._wall_parts[0].visible and not scene.hud.mode_button.visible, "volley displays a net and opponent without wall or pair controls")
+	_expect(is_instance_valid(scene.partner) and scene.court._volley_root.visible and not scene.court._wall_parts[0].visible and scene.hud.mode_button.visible and scene.hud.mode_button.text.contains("SINGLES"), "volley displays its net, opponent and singles/doubles selector")
 	_expect(scene.rally.best == 0 and scene.partner._id_label.text == "CPU" and scene.player._id_label.text == "YOU", "volley has a separate best and clear opponent identity")
 	var rig: CameraRig = scene.get_node("CameraRig")
 	_expect(not scene.player.visible and scene.partner.visible and rig._first_person.visible, "FPS hides the local full-body athlete and shows a foreground racket")
@@ -413,6 +467,68 @@ func _check_volley_scene() -> void:
 	root.add_child(restored)
 	await process_frame
 	_expect(restored.volley_mode and restored.rally is VolleyRally and restored.rally.best == 1 and restored._wall_players == 2, "reopening restores volley selection and keeps the wall player-count preference")
+	restored.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _check_volley_doubles_scene() -> void:
+	var path := "user://volley_doubles_check_%d.cfg" % Time.get_ticks_msec()
+	var scene = load("res://scenes/main.tscn").instantiate()
+	scene.save_path = path
+	root.add_child(scene)
+	await process_frame
+	scene.set_process(false)
+	scene._change_player_count(2)
+	scene._change_game_mode(true)
+	_touch(Vector2(350, 64), true)
+	await process_frame
+	_touch(Vector2(350, 64), false)
+	await process_frame
+	_expect(scene.rally.player_count == 2 and scene.rally.phase == WallRally.Phase.READY and scene.hud.mode_button.text.contains("DOUBLES"), "volley selector enters doubles without hitting a serve")
+	_expect(is_instance_valid(scene.volley_partner) and is_instance_valid(scene.opponent_partner) and scene.partner._id_label.text == "CPU 1" and scene.opponent_partner._id_label.text == "CPU 2", "doubles renders two opponents and a distinct near teammate")
+	var rig: CameraRig = scene.get_node("CameraRig")
+	_expect(not scene.player.visible and scene.volley_partner.visible and is_equal_approx(rig.camera.position.x, 3.0), "doubles starts in P1's first-person view with the teammate body enabled")
+	scene.rally.tap()
+	scene.rally.advance(scene.rally._duration)
+	scene._sync_visuals(0.1)
+	_expect(scene.rally.active_player == 1 and scene.player.visible and not scene.volley_partner.visible and scene.hud._mode_status.text.contains("P2 TO HIT"), "the crosscourt return changes control and body visibility to P2")
+	_expect(rig.camera.position.x > 3.0 and rig.camera.position.x < 9.0, "FPS camera moves toward the receiver without an instant side jump")
+	_touch(Vector2(216, 480), true)
+	await process_frame
+	scene._press_started_msec = Time.get_ticks_msec() - 50
+	_touch(Vector2(216, 480), false)
+	await process_frame
+	_expect(scene.rally.has_queued_shot(), "full-screen early touch queues a normal P2 volley")
+	for frame in range(180):
+		if scene.rally.returns == 1:
+			break
+		scene.rally.advance(1.0 / 60.0)
+		scene._sync_visuals(1.0 / 60.0)
+		var projected := rig.camera.unproject_position(scene.rally.ball_pos)
+		_expect(root.get_visible_rect().has_point(projected), "incoming ball stays on screen throughout the FPS doubles handoff")
+	_expect(scene.rally.returns == 1 and scene.rally.last_hitter == 1 and rig._view_paddle.position.x < CameraRig.PADDLE_REST.x, "P2 gets one returned volley with first-person racket feedback")
+	_expect(is_equal_approx(scene.partner._body.rotation.y, PI) and is_equal_approx(scene.opponent_partner._body.rotation.y, PI), "both opponents face the near team")
+	scene._toggle_pause()
+	scene._sync_visuals(0.0)
+	_touch(Vector2(350, 64), true)
+	await process_frame
+	_touch(Vector2(350, 64), false)
+	await process_frame
+	_expect(scene.rally.player_count == 1 and not is_instance_valid(scene.volley_partner) and not is_instance_valid(scene.opponent_partner) and scene.rally.best == 1, "singles toggle removes extra actors and preserves the volley best")
+	scene._change_player_count(2)
+	scene._change_game_mode(false)
+	_expect(scene.rally.player_count == 2 and scene.player.visible and not is_instance_valid(scene.volley_partner), "returning to wall restores its independent pair preference and actor layout")
+	scene._change_player_count(1)
+	scene._change_game_mode(true)
+	_expect(scene.rally.player_count == 2 and scene._wall_players == 1, "volley remembers doubles independently from the wall count")
+	scene.free()
+	var restored = load("res://scenes/main.tscn").instantiate()
+	restored.save_path = path
+	root.add_child(restored)
+	await process_frame
+	_expect(restored.volley_mode and restored.rally.player_count == 2 and restored._wall_players == 1 and restored.rally.best == 1 and is_instance_valid(restored.opponent_partner), "reopening restores doubles, separate wall count, best and all four athletes")
+	restored._change_player_count(1)
+	_expect(restored.hud.mode_button.text.contains("SINGLES") and not restored.player.visible and restored.partner.visible, "restored doubles can switch back to the original singles view")
 	restored.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 

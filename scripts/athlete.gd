@@ -92,15 +92,15 @@ func sync_practice(rally: WallRally, delta: float, player_index: int = 0) -> voi
 		return
 	_clock += delta
 	var feet := rally.player_position(player_index)
-	var volley := rally is VolleyRally
-	var opponent := volley and player_index == 1
+	var volley := rally as VolleyRally
+	var opponent := volley != null and volley.is_opponent(player_index)
 	var facing := -1.0 if opponent else 1.0
 	var moving := feet.distance_to(_previous_pos) > 0.002
 	position = feet
 	_selection_ring.visible = not opponent and (rally.player_count == 1 or rally.active_player == player_index)
-	_id_label.visible = rally.player_count == 2 or volley
-	_id_label.text = ("CPU" if opponent else "YOU") if volley else "P%d" % (player_index + 1)
-	_id_label.position = Vector3(0.6 if opponent else -0.6, 5.0, 0.0) if volley else Vector3(0.0, 4.6, 0.0)
+	_id_label.visible = rally.player_count == 2 or volley != null
+	_id_label.text = volley.player_label(player_index) if volley != null else "P%d" % (player_index + 1)
+	_id_label.position = Vector3(0.6 if opponent else -0.6, 5.0, 0.0) if volley != null else Vector3(0.0, 4.6, 0.0)
 	_body.rotation.y = PI if opponent else 0.0
 	_body.position.y = absf(sin(_clock * 14.0)) * 0.08 if moving else 0.0
 	_body.rotation.z = clampf((_previous_pos.x - position.x) * 1.5, -0.12, 0.12)

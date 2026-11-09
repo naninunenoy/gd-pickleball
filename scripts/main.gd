@@ -9,6 +9,7 @@ const SWIPE_DEADZONE := 14.0 # Reference viewport pixels, independent of phone s
 var rally: WallRally = WallRally.new()
 var volley_mode := false
 var _wall_players := 1
+var _volley_players := 1
 var paused := false
 var auto_rally := false
 var _touch_until := 0
@@ -23,6 +24,8 @@ var _last_wall_hits := 0
 var _saved_best := 0
 var _miss_time := 0.0
 var partner: Athlete
+var volley_partner: Athlete
+var opponent_partner: Athlete
 
 @onready var player: Athlete = $World/Player
 @onready var ball: RallyBall = $World/Ball
@@ -36,11 +39,12 @@ func _ready() -> void:
 	config.load(save_path)
 	volley_mode = str(config.get_value("practice", "game", "wall")) == "volley"
 	_wall_players = clampi(int(config.get_value("practice", "players", 1)), 1, 2)
+	_volley_players = clampi(int(config.get_value("volley", "players", 1)), 1, 2)
 	rally = VolleyRally.new() if volley_mode else WallRally.new()
 	rally.best = maxi(0, int(config.get_value("volley" if volley_mode else "practice", "best", 0)))
 	_saved_best = rally.best
 	rally.dominant_hand = dominant_hand
-	rally.set_player_count(1 if volley_mode else _wall_players)
+	rally.set_player_count(_volley_players if volley_mode else _wall_players)
 	_update_players()
 	hud.player_count_requested.connect(_change_player_count)
 	hud.volley_mode_requested.connect(_change_game_mode)
@@ -71,10 +75,16 @@ func _process(delta: float) -> void:
 
 func _sync_visuals(delta: float) -> void:
 	player.sync_practice(rally, delta, 0)
+	player.visible = not volley_mode or rally.active_player != 0
 	if is_instance_valid(partner):
-		partner.sync_practice(rally, delta, 1)
+		partner.sync_practice(rally, delta, rally.opponent_index() if volley_mode else 1)
+	if is_instance_valid(volley_partner):
+		volley_partner.sync_practice(rally, delta, 1)
+		volley_partner.visible = rally.active_player != 1
+	if is_instance_valid(opponent_partner):
+		opponent_partner.sync_practice(rally, delta, rally.opponent_index(1))
 	ball.sync_practice(rally, delta)
-	$CameraRig.sync_volley(rally)
+	$CameraRig.sync_volley(rally, delta)
 	court.animate(delta)
 	hud.sync_state(rally, paused)
 
@@ -89,15 +99,35 @@ func _update_players() -> void:
 	elif rally.player_count == 1 and not volley_mode and is_instance_valid(partner):
 		partner.queue_free()
 		partner = null
+	if volley_mode and rally.player_count == 2:
+		if not is_instance_valid(volley_partner):
+			volley_partner = Athlete.new()
+			volley_partner.name = "VolleyPartner"
+			volley_partner.outfit_color = Color("d6c18a")
+			volley_partner.selection_color = Color("ffe0a0")
+			$World.add_child(volley_partner)
+		if not is_instance_valid(opponent_partner):
+			opponent_partner = Athlete.new()
+			opponent_partner.name = "SecondOpponent"
+			opponent_partner.outfit_color = Color("ba9cc9")
+			opponent_partner.selection_color = Color("e4baff")
+			$World.add_child(opponent_partner)
+	else:
+		for athlete in [volley_partner, opponent_partner]:
+			if is_instance_valid(athlete):
+				athlete.queue_free()
+		volley_partner = null
+		opponent_partner = null
 
 
 func _change_player_count(count: int) -> void:
-	if volley_mode:
-		return
 	_cancel_press()
 	_save_best()
 	rally.set_player_count(count)
-	_wall_players = rally.player_count
+	if volley_mode:
+		_volley_players = rally.player_count
+	else:
+		_wall_players = rally.player_count
 	_update_players()
 	_reset_round_tracking()
 	paused = false
@@ -108,13 +138,14 @@ func _change_player_count(count: int) -> void:
 func _sync_court_mode() -> void:
 	court.set_volley_mode(volley_mode)
 	$CameraRig.set_volley_mode(volley_mode)
-	player.visible = not volley_mode
 
 
 func _change_game_mode(enabled: bool) -> void:
 	_cancel_press()
 	_save_best()
-	if not volley_mode:
+	if volley_mode:
+		_volley_players = rally.player_count
+	else:
 		_wall_players = rally.player_count
 	volley_mode = enabled
 	var config := ConfigFile.new()
@@ -122,7 +153,7 @@ func _change_game_mode(enabled: bool) -> void:
 	rally = VolleyRally.new() if enabled else WallRally.new()
 	rally.dominant_hand = dominant_hand
 	rally.best = maxi(0, int(config.get_value("volley" if enabled else "practice", "best", 0)))
-	rally.set_player_count(1 if enabled else _wall_players)
+	rally.set_player_count(_volley_players if enabled else _wall_players)
 	_saved_best = rally.best
 	_update_players()
 	_sync_court_mode()
@@ -302,6 +333,7 @@ func _save_configuration() -> void:
 	var section := "volley" if volley_mode else "practice"
 	config.set_value(section, "best", maxi(rally.best, int(config.get_value(section, "best", 0))))
 	config.set_value("practice", "players", _wall_players)
+	config.set_value("volley", "players", _volley_players)
 	config.set_value("practice", "game", "volley" if volley_mode else "wall")
 	if config.save(save_path) == OK:
 		_saved_best = rally.best

@@ -24,12 +24,15 @@ func set_volley_mode(enabled: bool) -> void:
 	_view_paddle.position = PADDLE_REST
 
 
-func sync_volley(rally: WallRally) -> void:
+func sync_volley(rally: WallRally, delta: float = 0.0) -> void:
 	if not rally is VolleyRally:
 		return
+	var target_x := rally.paddle_position().x
+	camera.position.x = move_toward(camera.position.x, target_x, WallRally.MOVE_SPEED * delta) if delta > 0.0 else target_x
+	camera.look_at(Vector3(camera.position.x, VolleyRally.VOLLEY_HEIGHT, 4.7))
 	var side := rally.hand_side()
 	var resting := Vector3(PADDLE_REST.x * side, PADDLE_REST.y, PADDLE_REST.z)
-	var recovery := clampf(rally.contact_age / 0.17, 0.0, 1.0) if rally.last_hitter == 0 else 1.0
+	var recovery := clampf(rally.contact_age / 0.17, 0.0, 1.0) if rally.last_hitter == rally.active_player else 1.0
 	var contact := camera.to_local(rally.last_contact_pos)
 	var swing := Vector3(0.0, -0.35, -1.4)
 	if contact.z < -0.1:

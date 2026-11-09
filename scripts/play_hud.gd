@@ -184,21 +184,23 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 	_reticle.visible = _displayed_volley
 	_reticle.position = _root.size * 0.5
 	_reticle.modulate = LIME if rally.can_return() else Color(1.0, 1.0, 1.0, 0.55)
-	_title.text = "Volley rally" if _displayed_volley else "Wall rally"
+	_title.text = ("Doubles volley" if rally.player_count == 2 else "Volley rally") if _displayed_volley else "Wall rally"
 	_score_caption.text = "VOLLEYS" if _displayed_volley else "RALLY"
 	_gesture_hint.text = "Tap to hit  /  Swipe up: lift  /  Down: drive" if _displayed_volley else "Swipe to aim  /  Hold for power"
 	_displayed_count = rally.player_count
 	var may_change := (rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED or paused) and not rally.charging
-	mode_button.visible = may_change and not _displayed_volley
+	mode_button.visible = may_change
 	game_button.visible = may_change
 	game_button.text = "VOLLEY RALLY\nSWITCH TO WALL" if _displayed_volley else "WALL RALLY\nSWITCH TO VOLLEY"
 	mode_button.text = "%d PLAYER%s\nSWITCH" % [rally.player_count, "S" if rally.player_count == 2 else ""]
+	if _displayed_volley:
+		mode_button.text = ("DOUBLES" if rally.player_count == 2 else "SINGLES") + "\nSWITCH"
 	_mode_status.visible = not mode_button.visible
 	_mode_status.text = "%d PLAYER%s" % [rally.player_count, "S" if rally.player_count == 2 else ""]
 	if rally.player_count == 2:
 		_mode_status.text += "\nP%d TO HIT" % (rally.active_player + 1)
 	if _displayed_volley:
-		_mode_status.text = "1 vs 1\nYOU vs CPU"
+		_mode_status.text = "2 vs 2\nP%d TO HIT" % (rally.active_player + 1) if rally.player_count == 2 else "1 vs 1\nYOU vs CPU"
 	_mode_status.add_theme_color_override("font_color", Color("9ee4ff") if rally.active_player == 1 else LIME)
 	_pause_dim.visible = paused
 	var held := rally.charging and rally.charge_time >= WallRally.MIN_POWER_HOLD
