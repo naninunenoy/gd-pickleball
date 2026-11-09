@@ -28,7 +28,16 @@ const DINK_CONTACT_HEIGHT := 1.9
 const BALL_RADIUS := 0.2
 const DINK_BOUNCE_TIME := 0.84
 const DINK_PICKUP_OPEN := 0.08
+const KITCHEN_HOME_Z := 19.4
+const BASELINE_HOME_Z := 22.0
+const GROUND_CONTACT_HEIGHT := 2.65
+const GROUND_FAR_LANDING_Z := 5.4
+const GROUND_NEAR_LANDING_Z := 17.6
+const GROUND_BOUNCE_TIME := 1.15
 
+var ground_mode := false
+var kitchen_line := true
+var bounce_required := false
 var opponent_returns := 0
 var opponent_receiver := 1
 var dink_shot := false
@@ -39,15 +48,17 @@ var _opponent_target := Vector3(6.0, VOLLEY_HEIGHT, 4.7)
 var _incoming_target := Vector3(6.0, VOLLEY_HEIGHT, INCOMING_END_Z)
 var _last_player_hitter := 0
 var _last_opponent_hitter := 1
+var _team_z := KITCHEN_HOME_Z
 
 
 func reset() -> void:
-	_player_positions.resize(player_count * 2)
-	_paddle_heights.resize(player_count * 2)
+	_player_positions.resize(player_count + 2)
+	_paddle_heights.resize(player_count + 2)
 	super.reset()
-	for index in range(player_count * 2):
+	_team_z = near_home_z()
+	for index in range(player_count + 2):
 		_player_positions[index] = home_position(index)
-	_paddle_heights.fill(VOLLEY_HEIGHT)
+	_paddle_heights.fill(GROUND_CONTACT_HEIGHT if ground_mode else VOLLEY_HEIGHT)
 	ball_pos = paddle_position(0)
 	last_contact_pos = ball_pos
 	receive_apex = paddle_position(0)
@@ -59,6 +70,7 @@ func reset() -> void:
 	_opponent_target = paddle_position(opponent_receiver)
 	_incoming_target = Vector3(target_x, VOLLEY_HEIGHT, INCOMING_END_Z)
 	dink_shot = false
+	bounce_required = false
 	dink_landing = Vector3.ZERO
 	ground_bounces = 0
 
@@ -66,6 +78,20 @@ func reset() -> void:
 func set_player_count(count: int) -> void:
 	player_count = clampi(count, 1, 2)
 	reset()
+
+
+func set_court_line(front: bool) -> void:
+	kitchen_line = front
+
+
+func near_home_z() -> float:
+	return KITCHEN_HOME_Z if kitchen_line else BASELINE_HOME_Z
+
+
+func _team_target_z() -> float:
+	if kitchen_line and dink_shot and (phase == Phase.RETURNING or phase == Phase.BOUNCED):
+		return NET_Z + DINK_CONTACT_DISTANCE + PADDLE_FORWARD
+	return near_home_z()
 
 
 func opponent_index(slot: int = 0) -> int:
@@ -77,8 +103,8 @@ func is_opponent(index: int) -> bool:
 
 
 func player_label(index: int) -> String:
-	if player_count == 1:
-		return "CPU" if is_opponent(index) else "YOU"
+	if player_count == 1 and not is_opponent(index):
+		return "YOU"
 	return "CPU %d" % (index - player_count + 1) if is_opponent(index) else "P%d" % (index + 1)
 
 
@@ -89,10 +115,12 @@ func paddle_position(index: int = -1) -> Vector3:
 
 
 func home_position(index: int) -> Vector3:
-	var slot := index % player_count
-	var racket_x := 6.0 if player_count == 1 else (3.0 if slot == 0 else 9.0)
-	var facing := -1.0 if is_opponent(index) else 1.0
-	return Vector3(racket_x - hand_side() * PADDLE_SIDE * facing, 0.0, 3.6 if is_opponent(index) else 19.4)
+	var opponent := is_opponent(index)
+	var slot := index - player_count if opponent else index
+	var racket_x := 6.0 if not opponent and player_count == 1 else (3.0 if slot == 0 else 9.0)
+	var facing := -1.0 if opponent else 1.0
+	var depth := (1.0 if ground_mode else 3.6) if opponent else near_home_z()
+	return Vector3(racket_x - hand_side() * PADDLE_SIDE * facing, 0.0, depth)
 
 
 func movement_target(index: int = -1) -> Vector3:
@@ -102,21 +130,20 @@ func movement_target(index: int = -1) -> Vector3:
 	if is_opponent(selected):
 		if phase == Phase.OUTBOUND and selected == opponent_receiver:
 			racket_x = _opponent_target.x
-			if dink_shot:
-				goal.z = _opponent_target.z - PADDLE_FORWARD
+			goal.z = _opponent_target.z - PADDLE_FORWARD
 	elif (phase == Phase.RETURNING or phase == Phase.BOUNCED) and selected == active_player:
 		racket_x = _incoming_target.x
-		if dink_shot:
-			goal.z = NET_Z + DINK_CONTACT_DISTANCE + PADDLE_FORWARD
-	if player_count == 2:
-		var slot := selected % player_count
+	if not is_opponent(selected):
+		goal.z = _team_target_z()
+	if is_opponent(selected) or player_count == 2:
+		var slot := selected - player_count if is_opponent(selected) else selected
 		racket_x = clampf(racket_x, 2.0 if slot == 0 else 6.0 - TERRITORY_OVERLAP, 6.0 + TERRITORY_OVERLAP if slot == 0 else 10.0)
 	goal.x = racket_x - hand_side() * PADDLE_SIDE * (-1.0 if is_opponent(selected) else 1.0)
 	return goal
 
 
 func _receiver_for_course(course_x: float, team_start: int, previous: int) -> int:
-	if player_count == 1:
+	if team_start == 0 and player_count == 1:
 		return team_start
 	if absf(course_x - WIDTH * 0.5) <= CENTER_SHARE_WIDTH:
 		return team_start + 1 - (previous - team_start)
@@ -134,7 +161,7 @@ func flight_time(start: Vector3, end: Vector3) -> float:
 func can_return() -> bool:
 	if phase == Phase.BOUNCED:
 		return phase_time >= DINK_PICKUP_OPEN and paddle_position().distance_to(ball_pos) <= VOLLEY_REACH
-	return phase == Phase.RETURNING and not dink_shot and not inside_kitchen(active_player) and paddle_position().distance_to(ball_pos) <= VOLLEY_REACH
+	return phase == Phase.RETURNING and not bounce_required and not inside_kitchen(active_player) and paddle_position().distance_to(ball_pos) <= VOLLEY_REACH
 
 
 func inside_kitchen(index: int) -> bool:
@@ -183,8 +210,10 @@ func tap(aim: Vector2 = Vector2.ZERO) -> void:
 
 
 func _request_shot(aim: Vector2) -> void:
-	if phase == Phase.READY or phase == Phase.MISSED:
+	if phase == Phase.MISSED:
 		reset()
+		_launch(0.0, aim)
+	elif phase == Phase.READY:
 		_launch(0.0, aim)
 	elif phase == Phase.RETURNING or phase == Phase.OUTBOUND or phase == Phase.BOUNCED:
 		_pending_charge = 0.0
@@ -198,7 +227,8 @@ func _request_shot(aim: Vector2) -> void:
 
 func _launch(_power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	var short_swipe := aim.length() > 0.0 and aim.length() < DINK_AIM_LIMIT
-	dink_shot = short_swipe or (aim == Vector2.ZERO and ball_pos.y < NET_HEIGHT)
+	dink_shot = short_swipe or (not ground_mode and aim == Vector2.ZERO and ball_pos.y < NET_HEIGHT)
+	bounce_required = dink_shot or ground_mode
 	cancel_charge()
 	bounces = 0
 	last_hitter = active_player
@@ -216,6 +246,13 @@ func _launch(_power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 		dink_landing = Vector3(_opponent_target.x, BALL_RADIUS, NET_Z - DINK_DROP_DISTANCE)
 		last_feedback = "Dink to the kitchen"
 		_segment(Phase.OUTBOUND, dink_landing, _dink_flight_time(ball_pos, dink_landing), _net_arc(ball_pos, dink_landing))
+		return
+	if ground_mode:
+		_opponent_target.y = GROUND_CONTACT_HEIGHT
+		dink_landing = Vector3(_opponent_target.x, BALL_RADIUS, GROUND_FAR_LANDING_Z)
+		var arc := _net_arc(ball_pos, dink_landing) + (0.6 if shot_aim.y < -VERTICAL_AIM_THRESHOLD else 0.0)
+		last_feedback = "To your opponents"
+		_segment(Phase.OUTBOUND, dink_landing, flight_time(ball_pos, dink_landing), arc)
 		return
 	var duration := flight_time(ball_pos, _opponent_target)
 	var distance := Vector2(_opponent_target.x - ball_pos.x, _opponent_target.z - ball_pos.z).length()
@@ -263,10 +300,14 @@ func _opponent_return() -> void:
 	shot_aim = Vector2.ZERO
 	bounces = 0
 	var course_x := 6.0 if player_count == 1 else clampf(WIDTH - ball_pos.x, 2.0, 10.0)
-	var target := Vector3(course_x, VOLLEY_HEIGHT, INCOMING_END_Z)
+	var target := Vector3(course_x, VOLLEY_HEIGHT, near_home_z())
 	if dink_shot:
 		target = Vector3(course_x, BALL_RADIUS, NET_Z + DINK_DROP_DISTANCE)
 		dink_landing = target
+	elif ground_mode:
+		target = Vector3(course_x, BALL_RADIUS, GROUND_NEAR_LANDING_Z)
+		dink_landing = target
+	bounce_required = dink_shot or ground_mode
 	_incoming_target = target
 	active_player = _receiver_for_course(course_x, 0, _last_player_hitter)
 	var duration := _dink_flight_time(ball_pos, target) if dink_shot else flight_time(ball_pos, target)
@@ -276,52 +317,69 @@ func _opponent_return() -> void:
 func _finish_volley_segment() -> void:
 	ball_pos = _to
 	if phase == Phase.OUTBOUND:
-		if dink_shot and bounces == 0:
+		if bounce_required and bounces == 0:
 			bounces = 1
 			ground_bounces += 1
-			_segment(Phase.OUTBOUND, _opponent_target, DINK_BOUNCE_TIME * 0.5, 0.425)
+			var duration := DINK_BOUNCE_TIME * 0.5 if dink_shot else GROUND_BOUNCE_TIME * 0.5
+			_segment(Phase.OUTBOUND, _opponent_target, duration, (_opponent_target.y - BALL_RADIUS) * 0.25)
 		else:
 			_opponent_return()
-	elif phase == Phase.RETURNING and dink_shot:
+	elif phase == Phase.RETURNING and bounce_required:
 		bounces = 1
 		ground_bounces += 1
-		last_feedback = "Dink bounced"
-		var end := Vector3(_incoming_target.x, BALL_RADIUS, NET_Z + DINK_CONTACT_DISTANCE * 2.0 - DINK_DROP_DISTANCE)
-		_segment(Phase.BOUNCED, end, DINK_BOUNCE_TIME, DINK_CONTACT_HEIGHT - BALL_RADIUS)
+		last_feedback = "Let it rise"
+		var end_z := NET_Z + DINK_CONTACT_DISTANCE * 2.0 - DINK_DROP_DISTANCE if dink_shot else LENGTH
+		var height := DINK_CONTACT_HEIGHT if dink_shot else GROUND_CONTACT_HEIGHT
+		_segment(Phase.BOUNCED, Vector3(_incoming_target.x, BALL_RADIUS, end_z), DINK_BOUNCE_TIME if dink_shot else GROUND_BOUNCE_TIME, height - BALL_RADIUS)
 	else:
 		if phase == Phase.BOUNCED:
 			bounces = 2
 			ground_bounces += 1
 		phase = Phase.MISSED
 		cancel_charge()
-		last_feedback = "Second bounce" if dink_shot else "The ball passed"
+		last_feedback = "Second bounce" if bounce_required else "The ball passed"
+
+
+func _move_players(step: float) -> void:
+	_team_z = move_toward(_team_z, _team_target_z(), MOVE_SPEED * step)
+	for index in range(player_count + 2):
+		var goal := movement_target(index)
+		if is_opponent(index):
+			_player_positions[index] = _player_positions[index].move_toward(goal, MOVE_SPEED * step)
+		else:
+			_player_positions[index].x = move_toward(_player_positions[index].x, goal.x, MOVE_SPEED * step)
+			_player_positions[index].z = _team_z
+		var height := GROUND_CONTACT_HEIGHT if ground_mode else VOLLEY_HEIGHT
+		if phase == Phase.OUTBOUND and index == opponent_receiver:
+			height = _opponent_target.y
+		if bounce_required and (phase == Phase.RETURNING or phase == Phase.BOUNCED) and index == active_player:
+			height = DINK_CONTACT_HEIGHT if dink_shot else GROUND_CONTACT_HEIGHT
+		_paddle_heights[index] = move_toward(_paddle_heights[index], height, 12.0 * step)
 
 
 func advance(delta: float) -> void:
 	var remaining := maxf(delta, 0.0)
 	if phase == Phase.READY or phase == Phase.MISSED:
+		_move_players(remaining)
+		if phase == Phase.READY:
+			ball_pos = paddle_position()
 		return
 	while remaining > 0.000001 and phase != Phase.READY and phase != Phase.MISSED:
 		var step := minf(remaining, 1.0 / 120.0)
 		# Give a late finger-down time to become a release, keeping the ball
 		# at its visible endpoint rather than letting it pass behind the camera.
-		var segment_end := _duration + LATE_RELEASE_GRACE if phase == Phase.RETURNING and not dink_shot and charging else _duration
+		var segment_end := _duration + LATE_RELEASE_GRACE if phase == Phase.RETURNING and not bounce_required and charging else _duration
 		step = minf(step, maxf(segment_end - phase_time, 0.000001))
 		remaining -= step
 		phase_time += step
 		contact_age += step
-		for index in range(player_count * 2):
-			_player_positions[index] = _player_positions[index].move_toward(movement_target(index), MOVE_SPEED * step)
-			var height := _opponent_target.y if phase == Phase.OUTBOUND and index == opponent_receiver else VOLLEY_HEIGHT
-			if dink_shot and (phase == Phase.RETURNING or phase == Phase.BOUNCED) and index == active_player:
-				height = DINK_CONTACT_HEIGHT
-			_paddle_heights[index] = move_toward(_paddle_heights[index], height, 12.0 * step)
+		_move_players(step)
 		var progress := clampf(phase_time / _duration, 0.0, 1.0)
 		ball_pos = _from.lerp(_to, progress)
 		ball_pos.y += 4.0 * _apex * progress * (1.0 - progress)
 		if _return_queued and can_return():
 			_return_ball()
 		elif phase_time >= _duration - 0.000001:
-			if phase == Phase.RETURNING and not dink_shot and charging and phase_time < segment_end - 0.000001:
+			if phase == Phase.RETURNING and not bounce_required and charging and phase_time < segment_end - 0.000001:
 				continue
 			_finish_volley_segment()

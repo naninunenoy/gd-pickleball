@@ -3,6 +3,7 @@ extends CanvasLayer
 
 signal player_count_requested(count: int)
 signal volley_mode_requested(enabled: bool)
+signal court_line_requested(front: bool)
 
 const CREAM := Color("eff0d7")
 const MUTED := Color("acbdac")
@@ -25,6 +26,7 @@ var _power_fill: StyleBoxFlat
 var _swipe_arrow: Line2D
 var mode_button: Button
 var game_button: Button
+var line_button: Button
 var _title: Label
 var _score_caption: Label
 var _mode_status: Label
@@ -32,6 +34,7 @@ var _displayed_count := 1
 var _displayed_volley := false
 var _last_touch_msec := -1000
 var _preview_dink := false
+var _displayed_front := false
 
 
 func _ready() -> void:
@@ -53,7 +56,7 @@ func _ready() -> void:
 	_pin(_dink_background, Vector2(24, 208), Vector2(384, 86))
 	_dink_background.visible = false
 	_label("P R A C T I C E   /   0 1", Vector2(24, 36), Vector2(280, 20), 12, MUTED)
-	_title = _label("Wall rally", Vector2(24, 59), Vector2(270, 40), 30, CREAM)
+	_title = _label("Rally practice", Vector2(24, 59), Vector2(270, 40), 30, CREAM)
 	_mode_status = _label("1 PLAYER", Vector2(292, 36), Vector2(116, 60), 14, LIME)
 	_mode_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_mode_status.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -79,6 +82,19 @@ func _ready() -> void:
 	_root.add_child(game_button)
 	_pin(game_button, Vector2(24, 28), Vector2(244, 72))
 	game_button.gui_input.connect(_game_input)
+	line_button = Button.new()
+	line_button.focus_mode = Control.FOCUS_NONE
+	line_button.add_theme_font_override("font", _font)
+	line_button.add_theme_font_size_override("font_size", 16)
+	line_button.add_theme_color_override("font_color", CREAM)
+	for state in ["normal", "hover", "focus"]:
+		line_button.add_theme_stylebox_override(state, _box(Color("2b5144"), 12))
+	line_button.add_theme_stylebox_override("pressed", _box(Color("3b6555"), 12))
+	_root.add_child(line_button)
+	line_button.offset_left = 24
+	line_button.offset_right = 408
+	_bottom(line_button, 160, 72)
+	line_button.gui_input.connect(_line_input)
 	_score_caption = _label("RALLY", Vector2(24, 116), Vector2(130, 20), 12, MUTED)
 	_score = _label("00", Vector2(20, 130), Vector2(220, 78), 64, CREAM)
 	_label("PERSONAL BEST", Vector2(267, 123), Vector2(142, 20), 11, MUTED)
@@ -106,7 +122,7 @@ func _ready() -> void:
 	_gesture_hint.add_theme_color_override("font_shadow_color", Color("173e36"))
 	_gesture_hint.add_theme_constant_override("shadow_offset_x", 1)
 	_gesture_hint.add_theme_constant_override("shadow_offset_y", 1)
-	_bottom(_gesture_hint, 100, 28)
+	_bottom(_gesture_hint, 190, 28)
 	build_label = _label(_build_identifier(), Vector2(24, 0), Vector2(384, 22), 16, CREAM)
 	build_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	build_label.add_theme_stylebox_override("normal", _box(Color(0.07, 0.2, 0.16, 0.92), 5))
@@ -136,7 +152,7 @@ func _ready() -> void:
 
 func show_swipe(start: Vector2, end: Vector2) -> void:
 	var direction := (end - start).normalized()
-	_preview_dink = _displayed_volley and (end - start).length() < VolleyRally.SWIPE_FULL_LENGTH * VolleyRally.DINK_AIM_LIMIT
+	_preview_dink = (end - start).length() < VolleyRally.SWIPE_FULL_LENGTH * VolleyRally.DINK_AIM_LIMIT
 	_swipe_arrow.default_color = Color("9ee9e4") if _preview_dink else LIME
 	_swipe_arrow.points = PackedVector2Array([start, end, end - direction.rotated(-0.55) * 16.0, end, end - direction.rotated(0.55) * 16.0])
 	_swipe_arrow.visible = true
@@ -175,6 +191,19 @@ func _game_input(event: InputEvent) -> void:
 		game_button.accept_event()
 
 
+func _line_input(event: InputEvent) -> void:
+	if line_button.disabled:
+		return
+	if event is InputEventScreenTouch:
+		if event.pressed and not event.canceled:
+			court_line_requested.emit(not _displayed_front)
+		line_button.accept_event()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed and Time.get_ticks_msec() - _last_touch_msec > 600:
+			court_line_requested.emit(not _displayed_front)
+		line_button.accept_event()
+
+
 func _build_identifier() -> String:
 	if FileAccess.file_exists("res://build_info.json"):
 		var info = JSON.parse_string(FileAccess.get_file_as_string("res://build_info.json"))
@@ -186,110 +215,63 @@ func _build_identifier() -> String:
 
 
 func sync_state(rally: WallRally, paused: bool) -> void:
+	var court := rally as VolleyRally
 	if not rally.charging:
 		clear_swipe()
 	_score.text = "%02d" % rally.returns
 	_best.text = "%02d" % rally.best
-	_displayed_volley = rally is VolleyRally
-	var volley := rally as VolleyRally
-	_dink_background.visible = volley != null and volley.dink_shot
-	_pad_background.visible = not _displayed_volley
-	_reticle.visible = _displayed_volley
-	_reticle.position = _root.size * 0.5
-	_reticle.modulate = LIME if rally.can_return() else Color(1.0, 1.0, 1.0, 0.55)
-	_title.text = ("Doubles volley" if rally.player_count == 2 else "Volley rally") if _displayed_volley else "Wall rally"
-	_score_caption.text = "VOLLEYS" if _displayed_volley else "RALLY"
-	_gesture_hint.text = "Short swipe: dink  /  Long swipe: drive" if _displayed_volley else "Swipe to aim  /  Hold for power"
+	_displayed_volley = not court.ground_mode
+	_displayed_front = court.kitchen_line
 	_displayed_count = rally.player_count
+	_pad_background.visible = false
+	_dink_background.visible = false
+	_reticle.visible = false
+	_title.text = "Volley practice" if _displayed_volley else "Rally practice"
+	_score_caption.text = "VOLLEYS" if _displayed_volley else "RALLY"
+	_gesture_hint.text = "Short swipe: dink  /  Long swipe: drive"
 	var may_change := (rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED or paused) and not rally.charging
 	mode_button.visible = may_change
 	game_button.visible = may_change
-	game_button.text = "VOLLEY RALLY\nSWITCH TO WALL" if _displayed_volley else "WALL RALLY\nSWITCH TO VOLLEY"
+	game_button.text = "VOLLEY\nSWITCH TO RALLY" if _displayed_volley else "RALLY\nSWITCH TO VOLLEY"
 	mode_button.text = "%d PLAYER%s\nSWITCH" % [rally.player_count, "S" if rally.player_count == 2 else ""]
-	if _displayed_volley:
-		mode_button.text = ("DOUBLES" if rally.player_count == 2 else "SINGLES") + "\nSWITCH"
-	_mode_status.visible = not mode_button.visible
-	_mode_status.text = "%d PLAYER%s" % [rally.player_count, "S" if rally.player_count == 2 else ""]
-	if rally.player_count == 2:
-		_mode_status.text += "\nP%d TO HIT" % (rally.active_player + 1)
-	if _displayed_volley:
-		_mode_status.text = "2 vs 2\nP%d TO HIT" % (rally.active_player + 1) if rally.player_count == 2 else "1 vs 1\nYOU vs CPU"
-	_mode_status.add_theme_color_override("font_color", Color("9ee4ff") if rally.active_player == 1 else LIME)
+	_mode_status.visible = not may_change
+	_mode_status.text = "%d vs 2\nP%d TO HIT" % [rally.player_count, rally.active_player + 1]
+	_mode_status.add_theme_color_override("font_color", Color("ffe0a0") if rally.active_player == 1 else LIME)
+	line_button.disabled = rally.charging
+	var team := "BOTH" if rally.player_count == 2 else "PLAYER"
+	line_button.text = ("KITCHEN LINE\nMOVE %s TO BASELINE" if _displayed_front else "BASELINE\nMOVE %s TO KITCHEN") % team
 	_pause_dim.visible = paused
-	var held := rally.charging and rally.charge_time >= WallRally.MIN_POWER_HOLD
-	_progress.value = rally.charge_fraction() if held else rally.bounce_progress()
-	_power_fill.bg_color = Color("ffb06d") if held else LIME
-	if _displayed_volley:
-		_top(_message, 218, 32)
-		_top(_hint, 256, 28)
-		_top(_progress, 292, 5)
-		_sync_volley(rally, paused)
-		return
-	_bottom(_message, 225, 32)
-	_bottom(_hint, 187, 28)
-	_bottom(_progress, 151, 5)
-	var ready := rally.can_tap()
+	_progress.value = court.bounce_progress()
+	_top(_message, 205, 32)
+	_top(_hint, 243, 28)
+	_top(_progress, 276, 5)
 	if paused:
 		_message.text = "Take a breath."
-		_hint.text = "Tap anywhere to resume."
-	elif held:
-		_message.text = "Power %d%%" % int(round(rally.charge_fraction() * 100.0))
-		_hint.text = "Longer hold, faster shot." if rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED else "Release when the ball is near your racket."
-	elif rally.phase == WallRally.Phase.READY:
-		_message.text = "Find your rhythm."
-		_hint.text = "Tap anywhere to serve."
-	elif rally.phase == WallRally.Phase.MISSED:
-		_message.text = "A new best!" if rally.returns > rally.starting_best else "One more rally?"
-		_hint.text = "Tap anywhere to retry. You made %d return%s." % [rally.returns, "" if rally.returns == 1 else "s"]
-	elif rally.has_queued_shot():
-		_message.text = "Waiting for the ball."
-		_hint.text = "Your shot will hit when the ball arrives."
-	elif rally.phase == WallRally.Phase.BOUNCED and rally.last_feedback == "Too late":
-		_message.text = "The ball has passed."
-		_hint.text = "Try releasing a little earlier."
-	elif ready:
-		_message.text = "Your moment."
-		_hint.text = "Tap now, even as the ball falls." if rally.bounce_progress() >= 0.5 else "Tap anywhere now. No hold needed."
-	elif rally.phase == WallRally.Phase.OUTBOUND:
-		_message.text = rally.last_feedback
-		_hint.text = "Tap anywhere. Hold for optional power."
-	else:
-		_message.text = "Let it bounce." if rally.phase == WallRally.Phase.RETURNING else "Get ready."
-		_hint.text = "Tap anywhere after the bounce."
-
-
-func _sync_volley(rally: WallRally, paused: bool) -> void:
-	var volley := rally as VolleyRally
-	if paused:
-		_message.text = "Take a breath."
-		_hint.text = "Tap anywhere to resume."
+		_hint.text = "Tap the court to resume."
 	elif rally.charging:
 		_message.text = "Dink ready." if _preview_dink else "Release to hit."
 		_hint.text = "Short swipe: dink. Long swipe: drive."
 	elif rally.phase == WallRally.Phase.READY:
-		_message.text = "Ready to volley?"
-		_hint.text = "Tap to rally. Short swipe to dink."
+		_message.text = "Ready to volley?" if _displayed_volley else "Ready to rally?"
+		_hint.text = "Tap the court. Move both with the bottom button."
 	elif rally.phase == WallRally.Phase.MISSED:
-		_message.text = "Second bounce." if volley.dink_shot else "The ball passed."
-		_hint.text = "Tap anywhere to try again."
+		_message.text = "Second bounce." if court.bounce_required else "The ball passed."
+		_hint.text = "Tap the court to try again."
 	elif rally.has_queued_shot():
 		_message.text = "Ready for the ball."
-		_hint.text = "Your shot will hit after the bounce." if volley.dink_shot else "Your shot will hit when it arrives."
+		_hint.text = "Your shot waits for the bounce." if court.bounce_required else "Your shot will hit when it arrives."
 	elif rally.phase == WallRally.Phase.OUTBOUND:
 		_message.text = rally.last_feedback
-		_hint.text = "Your opponent returns automatically."
-	elif volley.dink_shot and rally.phase == WallRally.Phase.RETURNING:
+		_hint.text = "Both recover to the selected line."
+	elif court.bounce_required and rally.phase == WallRally.Phase.RETURNING:
 		_message.text = "Let it bounce."
 		_hint.text = "Tap early. Hit after the bounce."
 	elif rally.phase == WallRally.Phase.BOUNCED:
-		_message.text = "Tap to dink!"
-		_hint.text = "Tap to return, or swipe for direction."
-	elif rally.can_tap():
+		_message.text = "Tap to return!"
+		_hint.text = "Short swipe for a dink."
+	else:
 		_message.text = "Tap to volley!"
 		_hint.text = "Tap or swipe. No hold needed."
-	else:
-		_message.text = "Here it comes."
-		_hint.text = "Tap as the ball approaches."
 
 
 func _label(text: String, pos: Vector2, size: Vector2, font_size: int, color: Color) -> Label:

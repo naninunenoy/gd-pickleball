@@ -1,25 +1,19 @@
 # gd-pickleball
 
-**Pickleball practice** — wall rallies and singles/doubles volleys, made for your phone in portrait.
+**Pickleball court practice** — portrait play against two automatic opponents.
 
-Use the left header selector before playing, after a miss, or while paused to switch between **WALL RALLY** and **VOLLEY RALLY**. The choice is saved. The right selector chooses wall player count or volley SINGLES / DOUBLES. Each game remembers its own choice.
+Both drills use the original fixed overhead view. All athletes, the net, the kitchen lines and the baselines stay visible. The former wall drill is now **RALLY**, a one-bounce exchange against two opponents; **VOLLEY** keeps volleys and short dinks. The left header selector changes drill before play, after a miss or while paused. The right selector chooses one or two near-side athletes; both drills start with two and always keep two opponents.
 
-**Volley rally** is a first-person kitchen-line exchange. Choose **SINGLES** for 1v1 or **DOUBLES** for 2v2 on the same phone; opponents return automatically. Tap anywhere to start or return when you lift your finger. A short swipe plays a **dink** into the opposing kitchen; a longer swipe plays a deep stroke. The arrow previews a short dink in blue and a deep stroke in green. Left/right aims the course; longer up/down swipes launch upward/downward. Gesture duration never adds power. Normal volleys retain their relaxed tempo (65% of normal wall speed with gentle acceleration).
+Use the large bottom button to choose **KITCHEN LINE** or **BASELINE** at any time, including during a rally. Both teammates move forward/backward together at the same pace. The button never serves, swings, resets the score or discards an early queued return. Each drill remembers its own line and player count. When positioned at the kitchen, both may step forward to collect a short bounced dink, then recover toward the selected line after hitting.
 
-A dink clears the net and bounces in the kitchen before it is picked up. Opponents reply with a dink, and your receiver moves forward to collect its bounce. An early tap waits until after the bounce; a normal tap on the low ball automatically dinks it back. Use a longer swipe to send the next ball deep and recover behind the kitchen line. Unbounced volleys are blocked inside the kitchen. A landing ring marks short shots, and the camera moves forward and looks lower during a dink pickup. Missing the second bounce ends the rally.
+Tap anywhere else to serve or return on release. A short swipe plays a dink; a longer swipe plays a deep stroke. Left/right chooses the course and long up/down swipes lift/drive. There is no hold power. Early input waits for the legal contact, including the first bounce in RALLY or on a dink. Missing a second bounce ends that exchange. Opponents pick up short shots after their bounce and automatically return across the court.
 
-In doubles, P1 covers the left half and P2 the right. The course selects the opposing receiver; opponents return crosscourt, and that course selects your next receiver. Central balls go to the partner. After hitting, each athlete recovers toward their home lane. The first-person camera stays centered with a wider view of both lanes; the header shows P1/P2 TO HIT as control changes. Tapping, retrying or changing receiver never pans the view sideways. Volley and wall practice keep separate personal bests and independent player-count preferences.
+P1 covers the left half and P2 the right. The incoming course selects the receiver, with central balls shared with the partner. Horizontal footwork is automatic and stays within each player's territory; depth follows the common line choice. Real racket contacts trigger a flash and ring. The court camera stays fixed during line changes, receiver changes, hits and retries.
 
-**Wall rally:** One wall. Practice with one or two athletes on the same phone. Tap anywhere to serve and return after one bounce. Footwork is automatic; keep the rally going and beat your saved personal best.
-
-The entire screen accepts taps and holds, including the score and footer. During a rally, there are no shot or player-switch buttons. Release a short tap for a normal shot, with a little early-tap assistance. You can also return the ball as it falls after the apex: normal taps and strong shots share the same extended reach during descent. Holding for at least 0.2 seconds selects optional power: release near the racket for a faster shot, up to 1.6x at 0.75 seconds. Nothing fires on press, so normal taps and holds never compete. Before lifting your finger, optionally swipe to aim: left/right changes the lateral shot direction, up/down sends it higher/lower. An arrow previews your swipe. A still tap sends the ball straight toward the wall; hold duration controls speed independently of aiming. A bright ring and sparks mark each strike. Tap to retry after a second bounce. Desktop click or Space / Enter uses the same gesture. P / Escape pauses; R resets. Leaving the app/tab pauses an active rally; tap anywhere to resume.
-
-Use the **1 PLAYER / 2 PLAYERS** selector before serving, after a miss, or while paused. Changing mode restarts the rally and keeps the shared personal best; the selected mode is saved. In two-player practice, P1 owns the left side and P2 owns the right. The return course chooses the receiver; central balls are yielded to the partner. After every strike both athletes return toward their own home positions until the ball hits the wall. Only after the wall rebound does the receiver approach the strike point, with limited middle coverage. The receiver stays fixed for that ball, including during a hold. P1/P2 labels, different outfits and the active player's foot ring show who is receiving. The other athlete stays at their own home position. A player may receive consecutive balls; switching follows the course rather than alternating turns.
+All game text is English. Click or Space / Enter uses the same gesture on desktop. P / Escape pauses and R resets. Leaving the app pauses an active rally. The two drills retain separate saved personal bests.
 
 - [Player rules](docs/rules.md)
 - [Implementation and validation](docs/implementation.md)
-
-All in-game text is English, using the embedded Inter font.
 
 ## Run
 

@@ -6,10 +6,12 @@ const SWIPE_DEADZONE := 14.0 # Reference viewport pixels, independent of phone s
 @export var dominant_hand: WallRally.Hand = WallRally.Hand.RIGHT
 @export var save_path := SAVE_PATH
 
-var rally: WallRally = WallRally.new()
+var rally: VolleyRally = VolleyRally.new()
 var volley_mode := false
-var _wall_players := 1
-var _volley_players := 1
+var _wall_players := 2
+var _volley_players := 2
+var _wall_front := false
+var _volley_front := true
 var paused := false
 var auto_rally := false
 var _touch_until := 0
@@ -20,7 +22,6 @@ var _press_started_msec := 0
 var _press_origin := Vector2.ZERO
 var _swipe_direction := Vector2.ZERO
 var _last_returns := 0
-var _last_wall_hits := 0
 var _saved_best := 0
 var _miss_time := 0.0
 var partner: Athlete
@@ -38,9 +39,13 @@ func _ready() -> void:
 	var config := ConfigFile.new()
 	config.load(save_path)
 	volley_mode = str(config.get_value("practice", "game", "wall")) == "volley"
-	_wall_players = clampi(int(config.get_value("practice", "players", 1)), 1, 2)
-	_volley_players = clampi(int(config.get_value("volley", "players", 1)), 1, 2)
-	rally = VolleyRally.new() if volley_mode else WallRally.new()
+	_wall_players = clampi(int(config.get_value("practice", "players", 2)), 1, 2)
+	_volley_players = clampi(int(config.get_value("volley", "players", 2)), 1, 2)
+	_wall_front = bool(config.get_value("practice", "front", false))
+	_volley_front = bool(config.get_value("volley", "front", true))
+	rally = VolleyRally.new()
+	rally.ground_mode = not volley_mode
+	rally.kitchen_line = _volley_front if volley_mode else _wall_front
 	rally.best = maxi(0, int(config.get_value("volley" if volley_mode else "practice", "best", 0)))
 	_saved_best = rally.best
 	rally.dominant_hand = dominant_hand
@@ -48,6 +53,7 @@ func _ready() -> void:
 	_update_players()
 	hud.player_count_requested.connect(_change_player_count)
 	hud.volley_mode_requested.connect(_change_game_mode)
+	hud.court_line_requested.connect(_change_court_line)
 	_sync_court_mode()
 	_sync_visuals(0.0)
 
@@ -63,61 +69,60 @@ func _process(delta: float) -> void:
 					_tap()
 		rally.advance(delta)
 		if auto_rally and rally.returns > _last_returns:
-			print("wall_return: %d best=%d" % [rally.returns, rally.best])
-		if rally.wall_hits > _last_wall_hits:
-			court.flash_wall()
+			print("court_return: %d best=%d" % [rally.returns, rally.best])
 		if rally.phase == WallRally.Phase.MISSED:
 			_save_best()
 	_last_returns = rally.returns
-	_last_wall_hits = rally.wall_hits
 	_sync_visuals(0.0 if paused else delta)
 
 
 func _sync_visuals(delta: float) -> void:
 	player.sync_practice(rally, delta, 0)
-	player.visible = not volley_mode
+	player.visible = true
 	if is_instance_valid(partner):
-		partner.sync_practice(rally, delta, rally.opponent_index() if volley_mode else 1)
+		partner.sync_practice(rally, delta, rally.opponent_index())
 	if is_instance_valid(volley_partner):
 		volley_partner.sync_practice(rally, delta, 1)
-		volley_partner.visible = false
+		volley_partner.visible = true
 	if is_instance_valid(opponent_partner):
 		opponent_partner.sync_practice(rally, delta, rally.opponent_index(1))
 	ball.sync_practice(rally, delta)
-	$CameraRig.sync_volley(rally, delta)
-	court.animate(delta)
 	hud.sync_state(rally, paused)
 
 
 func _update_players() -> void:
-	if (rally.player_count == 2 or volley_mode) and not is_instance_valid(partner):
+	if not is_instance_valid(partner):
 		partner = Athlete.new()
-		partner.name = "Partner"
+		partner.name = "Opponent1"
 		partner.outfit_color = Color("89bbd5")
 		partner.selection_color = Color("9ee4ff")
 		$World.add_child(partner)
-	elif rally.player_count == 1 and not volley_mode and is_instance_valid(partner):
-		partner.queue_free()
-		partner = null
-	if volley_mode and rally.player_count == 2:
+	if not is_instance_valid(opponent_partner):
+		opponent_partner = Athlete.new()
+		opponent_partner.name = "Opponent2"
+		opponent_partner.outfit_color = Color("ba9cc9")
+		opponent_partner.selection_color = Color("e4baff")
+		$World.add_child(opponent_partner)
+	if rally.player_count == 2:
 		if not is_instance_valid(volley_partner):
 			volley_partner = Athlete.new()
-			volley_partner.name = "VolleyPartner"
+			volley_partner.name = "Teammate"
 			volley_partner.outfit_color = Color("d6c18a")
 			volley_partner.selection_color = Color("ffe0a0")
 			$World.add_child(volley_partner)
-		if not is_instance_valid(opponent_partner):
-			opponent_partner = Athlete.new()
-			opponent_partner.name = "SecondOpponent"
-			opponent_partner.outfit_color = Color("ba9cc9")
-			opponent_partner.selection_color = Color("e4baff")
-			$World.add_child(opponent_partner)
-	else:
-		for athlete in [volley_partner, opponent_partner]:
-			if is_instance_valid(athlete):
-				athlete.queue_free()
+	elif is_instance_valid(volley_partner):
+		volley_partner.queue_free()
 		volley_partner = null
-		opponent_partner = null
+
+
+func _change_court_line(front: bool) -> void:
+	rally.set_court_line(front)
+	if volley_mode:
+		_volley_front = front
+	else:
+		_wall_front = front
+	_save_configuration()
+	_sync_visuals(0.0)
 
 
 func _change_player_count(count: int) -> void:
@@ -150,7 +155,9 @@ func _change_game_mode(enabled: bool) -> void:
 	volley_mode = enabled
 	var config := ConfigFile.new()
 	config.load(save_path)
-	rally = VolleyRally.new() if enabled else WallRally.new()
+	rally = VolleyRally.new()
+	rally.ground_mode = not enabled
+	rally.kitchen_line = _volley_front if enabled else _wall_front
 	rally.dominant_hand = dominant_hand
 	rally.best = maxi(0, int(config.get_value("volley" if enabled else "practice", "best", 0)))
 	rally.set_player_count(_volley_players if enabled else _wall_players)
@@ -185,7 +192,7 @@ func _update_swipe(source: StringName, id: int, position: Vector2) -> void:
 		return
 	var movement := position - _press_origin
 	_swipe_direction = movement.normalized() if movement.length() >= SWIPE_DEADZONE else Vector2.ZERO
-	if volley_mode and _swipe_direction != Vector2.ZERO:
+	if _swipe_direction != Vector2.ZERO:
 		_swipe_direction = (movement / VolleyRally.SWIPE_FULL_LENGTH).limit_length(1.0)
 	if _swipe_direction != Vector2.ZERO:
 		hud.show_swipe(_press_origin, position)
@@ -203,17 +210,7 @@ func _finish_press(source: StringName, id: int) -> void:
 	_swipe_direction = Vector2.ZERO
 	hud.clear_swipe()
 	var starting := rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED
-	if volley_mode:
-		# Volley gestures choose direction only; time held never adds power.
-		rally.release(held, aim)
-	elif held < WallRally.MIN_POWER_HOLD:
-		# A canceled/missed hold must not turn into a tap that restarts play.
-		var valid := rally.charging
-		rally.cancel_charge()
-		if valid:
-			rally.tap(aim)
-	else:
-		rally.release(held, aim)
+	rally.release(held, aim)
 	if starting and rally.phase == WallRally.Phase.OUTBOUND:
 		_reset_round_tracking()
 
@@ -231,7 +228,6 @@ func _cancel_press() -> void:
 
 func _reset_round_tracking() -> void:
 	_last_returns = 0
-	_last_wall_hits = 0
 	_miss_time = 0.0
 
 
@@ -336,6 +332,8 @@ func _save_configuration() -> void:
 	config.set_value(section, "best", maxi(rally.best, int(config.get_value(section, "best", 0))))
 	config.set_value("practice", "players", _wall_players)
 	config.set_value("volley", "players", _volley_players)
+	config.set_value("practice", "front", _wall_front)
+	config.set_value("volley", "front", _volley_front)
 	config.set_value("practice", "game", "volley" if volley_mode else "wall")
 	if config.save(save_path) == OK:
 		_saved_best = rally.best

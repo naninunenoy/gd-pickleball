@@ -34,7 +34,7 @@ jobs:
       - name: Install Godot 4.7.2 and web export templates
         run: ./scripts/install_godot.sh
 
-      - name: Check wall rally and touch input
+      - name: Check opponent rallies and touch input
         run: |
           "$HOME/.local/bin/godot" --headless --path . --import
           "$HOME/.local/bin/godot" --headless --path . -s res://scripts/check_slice.gd
