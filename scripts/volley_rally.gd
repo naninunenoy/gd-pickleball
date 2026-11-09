@@ -1,7 +1,7 @@
 class_name VolleyRally
 extends WallRally
 
-## Tap/swipe volleys at wall-practice speed. No hold power or ground bounce.
+## Tap/swipe volleys with a relaxed tempo. No hold power or ground bounce.
 const NET_Z := 11.5
 const NET_HEIGHT := 2.85
 const VOLLEY_HEIGHT := 4.4
@@ -13,7 +13,11 @@ const UP_ANGLE := 12.0
 const DOWN_ANGLE := -5.0
 const NORMAL_ANGLE := 4.0
 const VERTICAL_AIM_THRESHOLD := 0.3
-const GRAVITY := 8.0
+const SPEED_SCALE := 0.65
+const MIN_PACE := 0.9
+const PACE_STEP := 0.003
+# Slow time without changing the launch angle or pulling down shots into the net.
+const GRAVITY := 8.0 * SPEED_SCALE * SPEED_SCALE
 const NET_CLEARANCE := 0.25
 
 var opponent_returns := 0
@@ -53,8 +57,12 @@ func movement_target(index: int = -1) -> Vector3:
 	return _player_positions[0]
 
 
+func pace() -> float:
+	return maxf(MIN_PACE, 1.0 - float(returns) * PACE_STEP)
+
+
 func flight_time(start: Vector3, end: Vector3) -> float:
-	return Vector2(end.x - start.x, end.z - start.z).length() / NORMAL_BALL_SPEED * pace()
+	return Vector2(end.x - start.x, end.z - start.z).length() / (NORMAL_BALL_SPEED * SPEED_SCALE) * pace()
 
 
 func can_return() -> bool:

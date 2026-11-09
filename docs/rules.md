@@ -11,7 +11,7 @@ The left header selector switches **WALL RALLY / VOLLEY RALLY** before play, aft
 - Play from a first-person viewpoint against one automatic opponent. Your racket appears in the foreground; the center marker indicates when the ball is in reach.
 - Tap anywhere to start or return when you lift your finger. A still tap stays in the same lateral lane. There is no hold power; gesture duration never adds speed.
 - Swipe left/right to choose the side. Swipe up to launch upward or down to launch downward. Diagonal swipes combine side and stroke. An arrow previews the swipe, and small finger movement is ignored.
-- Ball speed follows normal wall practice, including its gradual acceleration. Initial flights take roughly 0.56–0.61 seconds. The prepared contact is higher so downward strokes can clear the net, and the opponent moves to meet each course.
+- Ball speed is 65% of normal wall-practice speed. Initial flights take roughly 0.86–0.93 seconds, with gentle acceleration limited to a 90% duration floor. The prepared contact is higher so downward strokes can clear the net, and the opponent moves to meet each course.
 - A released tap or swipe can wait for the next incoming ball, even when entered during your outgoing flight. It is consumed once when the ball enters racket reach. Pressing never hits automatically.
 - A press just before the ball passes gives up to 0.2 seconds to release. The ball stays visible at the endpoint during this grace; holding longer still misses.
 - The opponent volleys automatically. Your successful returns count toward the separate volley record; serving does not count. There is no ground bounce.

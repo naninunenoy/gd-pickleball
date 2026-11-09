@@ -231,7 +231,7 @@ func _check_volley_rally() -> void:
 		_expect(volley.phase == WallRally.Phase.READY and volley.ball_pos == volley.paddle_position(0), "volley starts on the player's racket for either hand")
 		volley.tap()
 		var distance := Vector2(volley._to.x - volley._from.x, volley._to.z - volley._from.z).length()
-		_expect(is_equal_approx(distance / volley._duration, WallRally.NORMAL_BALL_SPEED) and volley._duration < 0.6, "volley starts at wall-practice ball speed, over twice the previous tempo")
+		_expect(is_equal_approx(distance / volley._duration, WallRally.NORMAL_BALL_SPEED * 0.65) and volley._duration > 0.8 and volley._duration < 1.0, "volley gives roughly 0.9 seconds per initial flight at reduced speed")
 		volley.advance(volley._duration)
 		_expect(volley.phase == WallRally.Phase.RETURNING and volley.opponent_returns == 1 and volley.ball_pos.distance_to(volley.paddle_position(1)) < 0.001, "CPU volleys automatically from its real racket contact")
 		for hit in range(40):
@@ -241,7 +241,7 @@ func _check_volley_rally() -> void:
 			volley.tap()
 			_expect(volley.returns == hit + 1 and volley.last_hitter == 0 and volley.ball_pos == contact and volley.last_contact_pos == contact, "one tap returns once from the actual player contact")
 			_expect(volley.shot_aim == Vector2.ZERO and is_equal_approx(volley.shot_speed, 1.0) and is_equal_approx(volley.ball_pos.x, 6.0), "still taps keep the straight lane without hold power")
-		_expect(volley.best == 40 and is_equal_approx(volley.pace(), 0.72), "volley follows wall-practice acceleration and its pace limit")
+		_expect(volley.best == 40 and is_equal_approx(volley.pace(), 0.9), "long volley rallies limit acceleration to a gentle 90-percent duration floor")
 		volley.advance(10.0)
 		_expect(volley.phase == WallRally.Phase.MISSED and volley.returns == 40 and volley.bounces == 0, "missing a volley ends the rally without a ground bounce")
 		volley.tap()
@@ -257,7 +257,7 @@ func _check_volley_rally() -> void:
 		assisted.press()
 		assisted.release(0.04)
 		assisted.advance(incoming * (1.0 - progress))
-		_expect(assisted.returns == 1 and not assisted.has_queued_shot(), "early and late released taps each make one return at the faster tempo")
+		_expect(assisted.returns == 1 and not assisted.has_queued_shot(), "early and late released taps each make one return at the relaxed tempo")
 		assisted.advance(10.0)
 		_expect(assisted.phase == WallRally.Phase.MISSED and assisted.returns == 1, "one FPS gesture cannot return the next ball automatically")
 	var late := VolleyRally.new()
@@ -285,7 +285,7 @@ func _check_volley_rally() -> void:
 	coarse.advance(0.8)
 	for step in range(80):
 		fine.advance(0.01)
-	_expect(coarse.phase == fine.phase and coarse.ball_pos.distance_to(fine.ball_pos) < 0.001, "faster volley preserves trajectory time on slow frames")
+	_expect(coarse.phase == fine.phase and coarse.ball_pos.distance_to(fine.ball_pos) < 0.001, "volley preserves trajectory time on slow frames")
 
 
 func _check_volley_strokes() -> void:
@@ -313,7 +313,7 @@ func _check_volley_strokes() -> void:
 				aimed.advance(aimed._duration * net_progress - aimed.phase_time)
 				_expect(aimed.ball_pos.y >= VolleyRally.NET_HEIGHT + VolleyRally.NET_CLEARANCE - 0.001, "lift and downward strokes clear the net for either hand")
 				aimed.advance(aimed._duration - aimed.phase_time)
-				_expect(aimed.phase == WallRally.Phase.RETURNING and aimed.ball_pos.distance_to(aimed.paddle_position(1)) < 0.001, "CPU reaches the actual aimed contact at wall-practice speed")
+				_expect(aimed.phase == WallRally.Phase.RETURNING and aimed.ball_pos.distance_to(aimed.paddle_position(1)) < 0.001, "CPU reaches the actual aimed contact at the relaxed volley speed")
 				_expect(is_equal_approx(aimed.ball_pos.x, 6.0 + direction.x * VolleyRally.AIM_LATERAL_REACH), "horizontal swipes retain their selected side")
 				var net_time := aimed._duration * (VolleyRally.NET_Z - aimed.ball_pos.z) / (VolleyRally.INCOMING_END_Z - aimed.ball_pos.z)
 				aimed.advance(net_time)
