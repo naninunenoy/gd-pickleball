@@ -1,7 +1,7 @@
 class_name VolleyRally
 extends WallRally
 
-## Tap/swipe volleys with a relaxed tempo. No hold power or ground bounce.
+## Kitchen-line volleys and bounced dinks. No hold power.
 const NET_Z := 11.5
 const NET_HEIGHT := 2.85
 const VOLLEY_HEIGHT := 4.4
@@ -19,9 +19,21 @@ const PACE_STEP := 0.003
 # Slow time without changing the launch angle or pulling down shots into the net.
 const GRAVITY := 8.0 * SPEED_SCALE * SPEED_SCALE
 const NET_CLEARANCE := 0.25
+const SWIPE_FULL_LENGTH := 120.0
+const DINK_AIM_LIMIT := 0.65
+const KITCHEN_DEPTH := 7.0
+const DINK_DROP_DISTANCE := 2.2
+const DINK_CONTACT_DISTANCE := 3.4
+const DINK_CONTACT_HEIGHT := 1.9
+const BALL_RADIUS := 0.2
+const DINK_BOUNCE_TIME := 0.84
+const DINK_PICKUP_OPEN := 0.08
 
 var opponent_returns := 0
 var opponent_receiver := 1
+var dink_shot := false
+var dink_landing := Vector3.ZERO
+var ground_bounces := 0
 var _return_queued := false
 var _opponent_target := Vector3(6.0, VOLLEY_HEIGHT, 4.7)
 var _incoming_target := Vector3(6.0, VOLLEY_HEIGHT, INCOMING_END_Z)
@@ -46,6 +58,9 @@ func reset() -> void:
 	_last_opponent_hitter = opponent_receiver
 	_opponent_target = paddle_position(opponent_receiver)
 	_incoming_target = Vector3(target_x, VOLLEY_HEIGHT, INCOMING_END_Z)
+	dink_shot = false
+	dink_landing = Vector3.ZERO
+	ground_bounces = 0
 
 
 func set_player_count(count: int) -> void:
@@ -87,8 +102,12 @@ func movement_target(index: int = -1) -> Vector3:
 	if is_opponent(selected):
 		if phase == Phase.OUTBOUND and selected == opponent_receiver:
 			racket_x = _opponent_target.x
-	elif phase == Phase.RETURNING and selected == active_player:
+			if dink_shot:
+				goal.z = _opponent_target.z - PADDLE_FORWARD
+	elif (phase == Phase.RETURNING or phase == Phase.BOUNCED) and selected == active_player:
 		racket_x = _incoming_target.x
+		if dink_shot:
+			goal.z = NET_Z + DINK_CONTACT_DISTANCE + PADDLE_FORWARD
 	if player_count == 2:
 		var slot := selected % player_count
 		racket_x = clampf(racket_x, 2.0 if slot == 0 else 6.0 - TERRITORY_OVERLAP, 6.0 + TERRITORY_OVERLAP if slot == 0 else 10.0)
@@ -113,7 +132,14 @@ func flight_time(start: Vector3, end: Vector3) -> float:
 
 
 func can_return() -> bool:
-	return phase == Phase.RETURNING and paddle_position().distance_to(ball_pos) <= VOLLEY_REACH
+	if phase == Phase.BOUNCED:
+		return phase_time >= DINK_PICKUP_OPEN and paddle_position().distance_to(ball_pos) <= VOLLEY_REACH
+	return phase == Phase.RETURNING and not dink_shot and not inside_kitchen(active_player) and paddle_position().distance_to(ball_pos) <= VOLLEY_REACH
+
+
+func inside_kitchen(index: int) -> bool:
+	var depth := player_position(index).z - NET_Z
+	return depth >= -KITCHEN_DEPTH and depth <= 0.0 if is_opponent(index) else depth >= 0.0 and depth <= KITCHEN_DEPTH
 
 
 func can_power_return() -> bool:
@@ -121,7 +147,7 @@ func can_power_return() -> bool:
 
 
 func can_tap() -> bool:
-	return phase == Phase.RETURNING
+	return phase == Phase.RETURNING or phase == Phase.BOUNCED
 
 
 func has_queued_shot() -> bool:
@@ -134,7 +160,7 @@ func cancel_charge() -> void:
 
 
 func bounce_progress() -> float:
-	return clampf(phase_time / _duration, 0.0, 1.0) if phase == Phase.RETURNING else 0.0
+	return clampf(phase_time / _duration, 0.0, 1.0) if phase == Phase.RETURNING or phase == Phase.BOUNCED else 0.0
 
 
 func press() -> void:
@@ -160,7 +186,7 @@ func _request_shot(aim: Vector2) -> void:
 	if phase == Phase.READY or phase == Phase.MISSED:
 		reset()
 		_launch(0.0, aim)
-	elif phase == Phase.RETURNING or phase == Phase.OUTBOUND:
+	elif phase == Phase.RETURNING or phase == Phase.OUTBOUND or phase == Phase.BOUNCED:
 		_pending_charge = 0.0
 		_pending_aim = aim
 		if can_return():
@@ -171,7 +197,10 @@ func _request_shot(aim: Vector2) -> void:
 
 
 func _launch(_power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
+	var short_swipe := aim.length() > 0.0 and aim.length() < DINK_AIM_LIMIT
+	dink_shot = short_swipe or (aim == Vector2.ZERO and ball_pos.y < NET_HEIGHT)
 	cancel_charge()
+	bounces = 0
 	last_hitter = active_player
 	_last_player_hitter = active_player
 	last_contact_pos = ball_pos
@@ -181,6 +210,13 @@ func _launch(_power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	shot_aim = aim.normalized()
 	_opponent_target = Vector3(clampf(ball_pos.x + shot_aim.x * AIM_LATERAL_REACH, 2.0, 10.0), 0.0, paddle_position(opponent_index()).z)
 	opponent_receiver = _receiver_for_course(_opponent_target.x, player_count, _last_opponent_hitter)
+	if dink_shot:
+		_opponent_target.y = DINK_CONTACT_HEIGHT
+		_opponent_target.z = NET_Z - DINK_CONTACT_DISTANCE
+		dink_landing = Vector3(_opponent_target.x, BALL_RADIUS, NET_Z - DINK_DROP_DISTANCE)
+		last_feedback = "Dink to the kitchen"
+		_segment(Phase.OUTBOUND, dink_landing, _dink_flight_time(ball_pos, dink_landing), _net_arc(ball_pos, dink_landing))
+		return
 	var duration := flight_time(ball_pos, _opponent_target)
 	var distance := Vector2(_opponent_target.x - ball_pos.x, _opponent_target.z - ball_pos.z).length()
 	var angle := NORMAL_ANGLE
@@ -199,6 +235,68 @@ func _launch(_power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	_segment(Phase.OUTBOUND, _opponent_target, duration, GRAVITY * duration * duration / 8.0)
 
 
+func _return_ball() -> void:
+	super._return_ball()
+	if dink_shot:
+		last_feedback = "Dink return!"
+
+
+func _dink_flight_time(start: Vector3, end: Vector3) -> float:
+	return clampf(Vector2(end.x - start.x, end.z - start.z).length() / 7.0, 0.95, 1.35)
+
+
+func _net_arc(start: Vector3, end: Vector3) -> float:
+	var progress := (NET_Z - start.z) / (end.z - start.z)
+	var height := lerpf(start.y, end.y, progress)
+	return maxf(0.4, (NET_HEIGHT + NET_CLEARANCE - height) / (4.0 * progress * (1.0 - progress)))
+
+
+func _opponent_return() -> void:
+	opponent_returns += 1
+	last_hitter = opponent_receiver
+	_last_opponent_hitter = opponent_receiver
+	last_contact_pos = ball_pos
+	contact_age = 0.0
+	last_feedback = "Opponent dinks" if dink_shot else "Opponent returns"
+	shot_charge = 0.0
+	shot_speed = 1.0
+	shot_aim = Vector2.ZERO
+	bounces = 0
+	var course_x := 6.0 if player_count == 1 else clampf(WIDTH - ball_pos.x, 2.0, 10.0)
+	var target := Vector3(course_x, VOLLEY_HEIGHT, INCOMING_END_Z)
+	if dink_shot:
+		target = Vector3(course_x, BALL_RADIUS, NET_Z + DINK_DROP_DISTANCE)
+		dink_landing = target
+	_incoming_target = target
+	active_player = _receiver_for_course(course_x, 0, _last_player_hitter)
+	var duration := _dink_flight_time(ball_pos, target) if dink_shot else flight_time(ball_pos, target)
+	_segment(Phase.RETURNING, target, duration, _net_arc(ball_pos, target))
+
+
+func _finish_volley_segment() -> void:
+	ball_pos = _to
+	if phase == Phase.OUTBOUND:
+		if dink_shot and bounces == 0:
+			bounces = 1
+			ground_bounces += 1
+			_segment(Phase.OUTBOUND, _opponent_target, DINK_BOUNCE_TIME * 0.5, 0.425)
+		else:
+			_opponent_return()
+	elif phase == Phase.RETURNING and dink_shot:
+		bounces = 1
+		ground_bounces += 1
+		last_feedback = "Dink bounced"
+		var end := Vector3(_incoming_target.x, BALL_RADIUS, NET_Z + DINK_CONTACT_DISTANCE * 2.0 - DINK_DROP_DISTANCE)
+		_segment(Phase.BOUNCED, end, DINK_BOUNCE_TIME, DINK_CONTACT_HEIGHT - BALL_RADIUS)
+	else:
+		if phase == Phase.BOUNCED:
+			bounces = 2
+			ground_bounces += 1
+		phase = Phase.MISSED
+		cancel_charge()
+		last_feedback = "Second bounce" if dink_shot else "The ball passed"
+
+
 func advance(delta: float) -> void:
 	var remaining := maxf(delta, 0.0)
 	if phase == Phase.READY or phase == Phase.MISSED:
@@ -207,7 +305,7 @@ func advance(delta: float) -> void:
 		var step := minf(remaining, 1.0 / 120.0)
 		# Give a late finger-down time to become a release, keeping the ball
 		# at its visible endpoint rather than letting it pass behind the camera.
-		var segment_end := _duration + LATE_RELEASE_GRACE if phase == Phase.RETURNING and charging else _duration
+		var segment_end := _duration + LATE_RELEASE_GRACE if phase == Phase.RETURNING and not dink_shot and charging else _duration
 		step = minf(step, maxf(segment_end - phase_time, 0.000001))
 		remaining -= step
 		phase_time += step
@@ -215,6 +313,8 @@ func advance(delta: float) -> void:
 		for index in range(player_count * 2):
 			_player_positions[index] = _player_positions[index].move_toward(movement_target(index), MOVE_SPEED * step)
 			var height := _opponent_target.y if phase == Phase.OUTBOUND and index == opponent_receiver else VOLLEY_HEIGHT
+			if dink_shot and (phase == Phase.RETURNING or phase == Phase.BOUNCED) and index == active_player:
+				height = DINK_CONTACT_HEIGHT
 			_paddle_heights[index] = move_toward(_paddle_heights[index], height, 12.0 * step)
 		var progress := clampf(phase_time / _duration, 0.0, 1.0)
 		ball_pos = _from.lerp(_to, progress)
@@ -222,30 +322,6 @@ func advance(delta: float) -> void:
 		if _return_queued and can_return():
 			_return_ball()
 		elif phase_time >= _duration - 0.000001:
-			ball_pos = _to
-			if phase == Phase.OUTBOUND:
-				opponent_returns += 1
-				last_hitter = opponent_receiver
-				_last_opponent_hitter = opponent_receiver
-				last_contact_pos = ball_pos
-				contact_age = 0.0
-				last_feedback = "Opponent returns"
-				shot_charge = 0.0
-				shot_speed = 1.0
-				shot_aim = Vector2.ZERO
-				# Opponents play across the court; course, not turn count, picks
-				# the next near-side receiver. Central balls are shared.
-				var course_x := 6.0 if player_count == 1 else clampf(WIDTH - ball_pos.x, 2.0, 10.0)
-				var target := Vector3(course_x, VOLLEY_HEIGHT, INCOMING_END_Z)
-				_incoming_target = target
-				active_player = _receiver_for_course(course_x, 0, _last_player_hitter)
-				var net_progress := (NET_Z - ball_pos.z) / (target.z - ball_pos.z)
-				var net_height := lerpf(ball_pos.y, target.y, net_progress)
-				var arc := maxf(0.4, (NET_HEIGHT + NET_CLEARANCE - net_height) / (4.0 * net_progress * (1.0 - net_progress)))
-				_segment(Phase.RETURNING, target, flight_time(ball_pos, target), arc)
-			else:
-				if charging and phase_time < segment_end - 0.000001:
-					continue
-				phase = Phase.MISSED
-				cancel_charge()
-				last_feedback = "The ball passed"
+			if phase == Phase.RETURNING and not dink_shot and charging and phase_time < segment_end - 0.000001:
+				continue
+			_finish_volley_segment()

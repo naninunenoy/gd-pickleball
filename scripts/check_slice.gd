@@ -97,6 +97,7 @@ func _run() -> void:
 	_check_pair_recovery()
 	_check_volley_rally()
 	_check_volley_doubles()
+	_check_dink_shots()
 
 	# Exercise the real scene and input dispatch, including GUI consumption.
 	var scene = load("res://scenes/main.tscn").instantiate()
@@ -184,6 +185,7 @@ func _run() -> void:
 	await _check_pair_scene()
 	await _check_volley_scene()
 	await _check_volley_doubles_scene()
+	await _check_dink_scene()
 	for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
 		var handed_scene = load("res://scenes/main.tscn").instantiate()
 		var hand_path := "user://hand_check_%d_%d.cfg" % [int(hand), Time.get_ticks_msec()]
@@ -397,6 +399,54 @@ func _check_volley_doubles() -> void:
 		_expect(duo.player_count == 1 and duo.opponent_index() == 1 and duo.phase == WallRally.Phase.READY and not duo.has_queued_shot(), "switching back to singles resets actors and queued input")
 
 
+func _check_dink_shots() -> void:
+	for count in [1, 2]:
+		for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+			for direction in [Vector2.LEFT, Vector2.RIGHT, Vector2.UP, Vector2.DOWN]:
+				var dink := VolleyRally.new()
+				dink.dominant_hand = hand
+				dink.set_player_count(count)
+				dink.tap(direction * 0.3)
+				_expect(dink.dink_shot and dink.phase == WallRally.Phase.OUTBOUND and dink.dink_landing.z > VolleyRally.NET_Z - VolleyRally.KITCHEN_DEPTH and dink.dink_landing.z < VolleyRally.NET_Z, "short swipe lands a dink inside the opposing kitchen in singles and doubles")
+				var net_progress := (dink._from.z - VolleyRally.NET_Z) / (dink._from.z - dink._to.z)
+				dink.advance(dink._duration * net_progress)
+				_expect(dink.ball_pos.y >= VolleyRally.NET_HEIGHT + VolleyRally.NET_CLEARANCE - 0.001, "dink clears the net from every swipe direction and either hand")
+				dink.advance(dink._duration - dink.phase_time)
+				_expect(dink.bounces == 1 and dink.ground_bounces == 1 and dink.opponent_returns == 0 and dink.phase == WallRally.Phase.OUTBOUND, "CPU lets the short shot bounce before returning")
+				dink.advance(dink._duration)
+				_expect(dink.phase == WallRally.Phase.RETURNING and dink.opponent_returns == 1 and dink.inside_kitchen(dink.last_hitter) and dink.last_contact_pos.distance_to(dink.paddle_position(dink.last_hitter)) < 0.001, "CPU approaches the kitchen and returns from a real post-bounce racket contact")
+				_expect(not dink.can_return() and dink.movement_target(dink.active_player).z < VolleyRally.NET_Z + VolleyRally.KITCHEN_DEPTH, "near receiver approaches the kitchen but cannot volley an incoming dink")
+				dink.press()
+				dink.release(0.04)
+				dink.advance(dink._duration)
+				_expect(dink.phase == WallRally.Phase.BOUNCED and dink.bounces == 1 and dink.ground_bounces == 2 and dink.returns == 0 and dink.has_queued_shot(), "early normal tap waits through the near-side bounce without expiring")
+				dink.advance(0.1)
+				_expect(dink.returns == 1 and dink.dink_shot and dink.phase == WallRally.Phase.OUTBOUND and dink.last_contact_pos.y > VolleyRally.BALL_RADIUS and dink.inside_kitchen(dink.last_hitter), "normal tap automatically dinks the low bounced ball once from inside the kitchen")
+				# Change the next reply to a deep stroke, retaining full swipe length.
+				dink.press()
+				dink.release(0.04, Vector2.UP)
+				for frame in range(600):
+					if dink.returns == 2 or dink.phase == WallRally.Phase.MISSED:
+						break
+					dink.advance(1.0 / 120.0)
+				_expect(dink.returns == 2 and not dink.dink_shot and dink.shot_aim == Vector2.UP and dink.shot_charge == 0.0 and dink.ground_bounces == 4, "long swipe changes a bounced dink into a deep stroke without hold power")
+				dink.advance(dink._duration - dink.phase_time)
+				_expect(dink.phase == WallRally.Phase.RETURNING and not dink.inside_kitchen(dink.last_hitter), "CPU recovers outside the kitchen before volleying the deep stroke")
+				for index in range(count):
+					_expect(not dink.inside_kitchen(index), "near players recover behind the kitchen line after striking")
+	var missed := VolleyRally.new()
+	missed.set_player_count(1)
+	missed.tap(Vector2.UP * 0.3)
+	missed.advance(10.0)
+	_expect(missed.phase == WallRally.Phase.MISSED and missed.bounces == 2 and missed.returns == 0 and missed.ground_bounces == 3, "a missed dink ends on its second near-side bounce")
+	missed.tap()
+	_expect(not missed.dink_shot and missed.ground_bounces == 0 and missed.phase == WallRally.Phase.OUTBOUND, "a new normal tap retries the volley drill without stale dink state")
+	missed.advance(missed._duration)
+	_until_return(missed)
+	missed.player_pos.z = missed.ball_pos.z + WallRally.PADDLE_FORWARD
+	_expect(missed.paddle_position().distance_to(missed.ball_pos) < VolleyRally.VOLLEY_REACH and missed.inside_kitchen(0) and not missed.can_return(), "a normal volley is disallowed inside the kitchen even when the racket can reach")
+
+
 func _check_volley_scene() -> void:
 	var path := "user://volley_check_%d.cfg" % Time.get_ticks_msec()
 	var scene = load("res://scenes/main.tscn").instantiate()
@@ -432,7 +482,7 @@ func _check_volley_scene() -> void:
 	await process_frame
 	scene._sync_visuals(0.0)
 	_expect(scene.rally.shot_aim == Vector2.RIGHT and is_equal_approx(scene.rally.shot_speed, 1.0) and scene.rally.shot_charge == 0.0 and not scene.hud._swipe_arrow.visible, "long volley gesture chooses direction on release without adding power")
-	_expect(not scene.hud.game_button.visible and scene.hud._gesture_hint.text.contains("Tap to hit"), "playing volley retains full-screen normal taps alongside optional gestures")
+	_expect(not scene.hud.game_button.visible and scene.hud._gesture_hint.text.contains("Short swipe: dink"), "playing volley retains full-screen normal taps alongside optional gestures")
 	_expect(rig._view_paddle.position.x < CameraRig.PADDLE_REST.x, "FPS racket swings toward the actual straight-shot contact")
 	scene.rally.advance(scene.rally._duration)
 	scene._sync_visuals(0.0)
@@ -530,6 +580,68 @@ func _check_volley_doubles_scene() -> void:
 	restored._change_player_count(1)
 	_expect(restored.hud.mode_button.text.contains("SINGLES") and not restored.player.visible and restored.partner.visible, "restored doubles can switch back to the original singles view")
 	restored.free()
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _check_dink_scene() -> void:
+	var path := "user://dink_scene_check_%d.cfg" % Time.get_ticks_msec()
+	var scene = load("res://scenes/main.tscn").instantiate()
+	scene.save_path = path
+	root.add_child(scene)
+	await process_frame
+	scene.set_process(false)
+	scene._change_game_mode(true)
+	scene._change_player_count(2)
+	_touch(Vector2(216, 480), true)
+	await process_frame
+	scene._update_swipe(&"touch", 0, Vector2(216, 440))
+	scene._sync_visuals(0.0)
+	_expect(scene.hud._preview_dink and scene.hud._message.text == "Dink ready.", "short viewport swipe previews a dink instead of charging power")
+	scene._press_started_msec = Time.get_ticks_msec() - 50
+	_touch(Vector2(216, 440), false)
+	await process_frame
+	_expect(scene.rally.dink_shot and scene.rally.returns == 0, "short real touch gesture serves a dink without a shot button")
+	var rig: CameraRig = scene.get_node("CameraRig")
+	var saw_bounce := false
+	var stays_visible := true
+	var early_hit := false
+	var queued := false
+	for frame in range(600):
+		if scene.rally.returns == 1 or scene.rally.phase == WallRally.Phase.MISSED:
+			break
+		scene.rally.advance(1.0 / 60.0)
+		scene._sync_visuals(1.0 / 60.0)
+		if scene.rally.phase == WallRally.Phase.RETURNING and not queued:
+			_touch(Vector2(216, 480), true)
+			await process_frame
+			scene._press_started_msec = Time.get_ticks_msec() - 50
+			_touch(Vector2(216, 480), false)
+			await process_frame
+			queued = true
+		if scene.rally.phase == WallRally.Phase.RETURNING:
+			early_hit = early_hit or scene.rally.returns != 0
+		if scene.rally.phase == WallRally.Phase.BOUNCED:
+			saw_bounce = true
+			_expect(scene.ball._landing.visible and scene.hud._message.text == "Ready for the ball.", "bounced dink keeps its landing marker and queued-shot guidance")
+		var point := rig.camera.unproject_position(scene.rally.ball_pos)
+		stays_visible = stays_visible and root.get_visible_rect().has_point(point)
+	_expect(queued and saw_bounce and not early_hit and scene.rally.returns == 1 and scene.rally.last_hitter == 1, "early whole-screen tap waits for P2's kitchen bounce and returns once")
+	_expect(stays_visible and rig.camera.position.z < 20.8 and rig.camera.position.y < 5.4, "FPS camera follows the kitchen pickup and keeps the low dink visible")
+	_touch(Vector2(216, 480), true)
+	await process_frame
+	scene._update_swipe(&"touch", 0, Vector2(336, 480))
+	scene._sync_visuals(0.0)
+	_expect(not scene.hud._preview_dink, "a longer swipe previews a deep stroke")
+	scene._press_started_msec = Time.get_ticks_msec() - 50
+	_touch(Vector2(336, 480), false)
+	await process_frame
+	for frame in range(600):
+		if scene.rally.returns == 2 or scene.rally.phase == WallRally.Phase.MISSED:
+			break
+		scene.rally.advance(1.0 / 60.0)
+		scene._sync_visuals(1.0 / 60.0)
+	_expect(scene.rally.returns == 2 and not scene.rally.dink_shot and scene.rally.shot_aim == Vector2.RIGHT and not scene.ball._landing.visible, "long real swipe switches the next bounced return back to a deep stroke")
+	scene.free()
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 
 

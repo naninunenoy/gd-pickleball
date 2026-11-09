@@ -10,11 +10,14 @@ The left header selector switches **WALL RALLY / VOLLEY RALLY** before play, aft
 
 - Use the right selector to choose SINGLES (1v1) or DOUBLES (2v2) before play, after a miss, or while paused. Both use the same phone and full-screen input. Your racket appears in the foreground; the center marker indicates when the ball is in reach.
 - Tap anywhere to start or return when you lift your finger. A still tap stays in the same lateral lane. There is no hold power; gesture duration never adds speed.
-- Swipe left/right to choose the side. Swipe up to launch upward or down to launch downward. Diagonal swipes combine side and stroke. An arrow previews the swipe, and small finger movement is ignored.
+- A short swipe plays a soft dink into the opposing kitchen; a longer swipe plays a deep stroke. Left/right chooses the side; longer up/down swipes launch upward/downward. Diagonals combine side and stroke. The preview arrow is blue for a dink and green for a deep stroke; small finger movement is ignored.
 - Ball speed is 65% of normal wall-practice speed. Initial singles flights take roughly 0.86–0.93 seconds, with gentle acceleration limited to a 90% duration floor. The prepared contact is higher so downward strokes can clear the net, and the opponent moves to meet each course.
 - A released tap or swipe can wait for the next incoming ball, even when entered during your outgoing flight. It is consumed once when the ball enters racket reach. Pressing never hits automatically.
 - A press just before the ball passes gives up to 0.2 seconds to release. The ball stays visible at the endpoint during this grace; holding longer still misses.
-- The opponent volleys automatically. Your successful returns count toward the separate volley record; serving does not count. There is no ground bounce.
+- A dink bounces in the kitchen before the opponent picks it up and dinks back. Your receiver moves into the kitchen for the bounced ball. An early tap waits until after the bounce; a tap on the low ball automatically plays another dink. A long swipe can send it deep instead.
+- A landing ring marks the dink's bounce. The camera follows forward and looks lower so the pickup stays visible. A second bounce ends the rally. A fresh tap retries.
+- Unbounced volleys require the player's feet outside the kitchen, including its boundary line. Bounced balls may be struck inside it. After a hit, recover toward the line.
+- Opponents return automatically. Your successful returns count toward the separate volley record; serving and ground bounces do not count.
 - In doubles, P1 covers the left half and P2 the right. The course selects the far-side CPU receiver. Opponents return crosscourt, and the resulting near-side course selects P1 or P2; central balls are yielded to the partner. Selection follows the course rather than a hit counter.
 - After a hit, return toward your own home lane. Only the receiving athlete approaches the next ball; the partner stays in their own half. The camera moves to the receiver's first-person view automatically and the header names P1/P2 TO HIT. No player-switch button is needed.
 - Tap after a miss to restart, or use the header selector to return to wall practice. Singles/doubles and wall player count are remembered independently; singles and doubles share the volley personal best.

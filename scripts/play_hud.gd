@@ -17,6 +17,7 @@ var _gesture_hint: Label
 var _progress: ProgressBar
 var _pause_dim: ColorRect
 var _pad_background: ColorRect
+var _dink_background: Panel
 var _reticle: Node2D
 var _root: Control
 var _font: Font
@@ -30,6 +31,7 @@ var _mode_status: Label
 var _displayed_count := 1
 var _displayed_volley := false
 var _last_touch_msec := -1000
+var _preview_dink := false
 
 
 func _ready() -> void:
@@ -44,6 +46,12 @@ func _ready() -> void:
 	_root.add_child(_pad_background)
 	_pad_background.anchor_right = 1.0
 	_bottom(_pad_background, 252, 252)
+	_dink_background = Panel.new()
+	_dink_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dink_background.add_theme_stylebox_override("panel", _box(Color(0.07, 0.2, 0.16, 0.94), 8))
+	_root.add_child(_dink_background)
+	_pin(_dink_background, Vector2(24, 208), Vector2(384, 86))
+	_dink_background.visible = false
 	_label("P R A C T I C E   /   0 1", Vector2(24, 36), Vector2(280, 20), 12, MUTED)
 	_title = _label("Wall rally", Vector2(24, 59), Vector2(270, 40), 30, CREAM)
 	_mode_status = _label("1 PLAYER", Vector2(292, 36), Vector2(116, 60), 14, LIME)
@@ -128,11 +136,14 @@ func _ready() -> void:
 
 func show_swipe(start: Vector2, end: Vector2) -> void:
 	var direction := (end - start).normalized()
+	_preview_dink = _displayed_volley and (end - start).length() < VolleyRally.SWIPE_FULL_LENGTH * VolleyRally.DINK_AIM_LIMIT
+	_swipe_arrow.default_color = Color("9ee9e4") if _preview_dink else LIME
 	_swipe_arrow.points = PackedVector2Array([start, end, end - direction.rotated(-0.55) * 16.0, end, end - direction.rotated(0.55) * 16.0])
 	_swipe_arrow.visible = true
 
 
 func clear_swipe() -> void:
+	_preview_dink = false
 	if is_instance_valid(_swipe_arrow):
 		_swipe_arrow.visible = false
 
@@ -180,13 +191,15 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 	_score.text = "%02d" % rally.returns
 	_best.text = "%02d" % rally.best
 	_displayed_volley = rally is VolleyRally
+	var volley := rally as VolleyRally
+	_dink_background.visible = volley != null and volley.dink_shot
 	_pad_background.visible = not _displayed_volley
 	_reticle.visible = _displayed_volley
 	_reticle.position = _root.size * 0.5
 	_reticle.modulate = LIME if rally.can_return() else Color(1.0, 1.0, 1.0, 0.55)
 	_title.text = ("Doubles volley" if rally.player_count == 2 else "Volley rally") if _displayed_volley else "Wall rally"
 	_score_caption.text = "VOLLEYS" if _displayed_volley else "RALLY"
-	_gesture_hint.text = "Tap to hit  /  Swipe up: lift  /  Down: drive" if _displayed_volley else "Swipe to aim  /  Hold for power"
+	_gesture_hint.text = "Short swipe: dink  /  Long swipe: drive" if _displayed_volley else "Swipe to aim  /  Hold for power"
 	_displayed_count = rally.player_count
 	var may_change := (rally.phase == WallRally.Phase.READY or rally.phase == WallRally.Phase.MISSED or paused) and not rally.charging
 	mode_button.visible = may_change
@@ -246,24 +259,31 @@ func sync_state(rally: WallRally, paused: bool) -> void:
 
 
 func _sync_volley(rally: WallRally, paused: bool) -> void:
+	var volley := rally as VolleyRally
 	if paused:
 		_message.text = "Take a breath."
 		_hint.text = "Tap anywhere to resume."
 	elif rally.charging:
-		_message.text = "Release to hit."
-		_hint.text = "Swipe up to lift, down to drive."
+		_message.text = "Dink ready." if _preview_dink else "Release to hit."
+		_hint.text = "Short swipe: dink. Long swipe: drive."
 	elif rally.phase == WallRally.Phase.READY:
 		_message.text = "Ready to volley?"
-		_hint.text = "Tap or swipe anywhere to start."
+		_hint.text = "Tap to rally. Short swipe to dink."
 	elif rally.phase == WallRally.Phase.MISSED:
-		_message.text = "The ball passed."
+		_message.text = "Second bounce." if volley.dink_shot else "The ball passed."
 		_hint.text = "Tap anywhere to try again."
 	elif rally.has_queued_shot():
 		_message.text = "Ready for the ball."
-		_hint.text = "Your shot will hit when it arrives."
+		_hint.text = "Your shot will hit after the bounce." if volley.dink_shot else "Your shot will hit when it arrives."
 	elif rally.phase == WallRally.Phase.OUTBOUND:
 		_message.text = rally.last_feedback
 		_hint.text = "Your opponent returns automatically."
+	elif volley.dink_shot and rally.phase == WallRally.Phase.RETURNING:
+		_message.text = "Let it bounce."
+		_hint.text = "Tap early. Hit after the bounce."
+	elif rally.phase == WallRally.Phase.BOUNCED:
+		_message.text = "Tap to dink!"
+		_hint.text = "Tap to return, or swipe for direction."
 	elif rally.can_tap():
 		_message.text = "Tap to volley!"
 		_hint.text = "Tap or swipe. No hold needed."

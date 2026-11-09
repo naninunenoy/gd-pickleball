@@ -185,6 +185,8 @@ func _update_swipe(source: StringName, id: int, position: Vector2) -> void:
 		return
 	var movement := position - _press_origin
 	_swipe_direction = movement.normalized() if movement.length() >= SWIPE_DEADZONE else Vector2.ZERO
+	if volley_mode and _swipe_direction != Vector2.ZERO:
+		_swipe_direction = (movement / VolleyRally.SWIPE_FULL_LENGTH).limit_length(1.0)
 	if _swipe_direction != Vector2.ZERO:
 		hud.show_swipe(_press_origin, position)
 	else:
