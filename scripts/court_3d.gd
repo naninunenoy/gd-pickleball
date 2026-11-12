@@ -30,11 +30,12 @@ func _ready() -> void:
 func _build_volley_court() -> void:
 	_volley_root = Node3D.new()
 	add_child(_volley_root)
-	_box(Vector3(12.0, 0.025, 14.0), Vector3(6.0, 0.075, 11.5), Color("31745f"), _volley_root)
-	for z in [4.5, 18.5]:
+	_box(Vector3(12.0, 0.025, VolleyRally.KITCHEN_DEPTH * 2.0), Vector3(6.0, 0.075, 11.5), Color("31745f"), _volley_root)
+	for z in [VolleyRally.NET_Z - VolleyRally.KITCHEN_DEPTH, VolleyRally.NET_Z + VolleyRally.KITCHEN_DEPTH]:
 		_box(Vector3(12.1, 0.04, 0.1), Vector3(6.0, 0.1, z), Color("dcdfbb"), _volley_root)
-	for z in [2.25, 20.75]:
-		_box(Vector3(0.08, 0.04, 4.5), Vector3(6.0, 0.1, z), Color("dcdfbb"), _volley_root)
+	var backcourt := VolleyRally.NET_Z - VolleyRally.KITCHEN_DEPTH
+	for z in [backcourt * 0.5, WallRally.LENGTH - backcourt * 0.5]:
+		_box(Vector3(0.08, 0.04, backcourt), Vector3(6.0, 0.1, z), Color("dcdfbb"), _volley_root)
 	for x in [-0.3, 12.3]:
 		_box(Vector3(0.14, 3.0, 0.14), Vector3(x, 1.5, VolleyRally.NET_Z), Color("294d43"), _volley_root)
 	_box(Vector3(12.6, 0.12, 0.12), Vector3(6.0, VolleyRally.NET_HEIGHT, VolleyRally.NET_Z), Color("eff0d7"), _volley_root)

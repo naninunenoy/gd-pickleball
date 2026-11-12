@@ -3,6 +3,8 @@ extends Node3D
 
 ## Footwork and the striking hand share the simulation's contact geometry.
 const FOLLOW_THROUGH := 0.28
+const UPPER_ARM_LENGTH := 0.95
+const FOREARM_LENGTH := 0.95
 
 @export var outfit_color := Color("e9f0d7")
 @export var selection_color := Color("d5ef9d")
@@ -58,8 +60,8 @@ func _ready() -> void:
 	grip.position.y = -0.5
 	grip.material_override = _material(Color("243e38"))
 	_paddle.add_child(grip)
-	_upper_arm = _arm_piece(outfit_color, 0.16)
-	_forearm = _arm_piece(Color("edb38c"), 0.12)
+	_upper_arm = _arm_piece(outfit_color, 0.16, UPPER_ARM_LENGTH)
+	_forearm = _arm_piece(Color("edb38c"), 0.12, FOREARM_LENGTH)
 	_free_arm = _arm_piece(outfit_color, 0.15)
 	var hand_mesh := SphereMesh.new()
 	hand_mesh.radius = 0.16
@@ -110,23 +112,33 @@ func sync_practice(rally: WallRally, delta: float, player_index: int = 0) -> voi
 	var follow := sin(recovery * PI)
 	var resting := rally.paddle_position(player_index)
 	# The face starts exactly at the real ball contact, then follows through.
-	var contact := rally.last_contact_pos.lerp(resting, recovery)
+	var contact := (position + rally.last_contact_offset).lerp(resting, recovery)
 	contact += Vector3(-side * follow * 0.3 * facing, follow * 0.15, -follow * 0.85 * facing)
-	_paddle.position = contact - position
 	_paddle.rotation.y = -side * follow * 0.65
+	# Lower the shoulders for a low pickup rather than lengthening the arms.
+	_body.position.y -= clampf(2.65 - contact.y, 0.0, 1.1)
 	var shoulder := _body.transform * Vector3(side * 0.43, 2.75, 0.0)
-	var grip := _paddle.position + Vector3(0.0, -0.48, 0.0)
-	var elbow := shoulder.lerp(grip, 0.5) + Vector3(side * 0.12, -0.12, 0.12)
+	var offset := contact - position + Vector3(0.0, -0.48, 0.0) - shoulder
+	var distance := clampf(offset.length(), 0.01, UPPER_ARM_LENGTH + FOREARM_LENGTH - 0.001)
+	var direction := offset.normalized() if offset.length_squared() > 0.000001 else Vector3.DOWN
+	var grip := shoulder + direction * distance
+	var along := (UPPER_ARM_LENGTH * UPPER_ARM_LENGTH - FOREARM_LENGTH * FOREARM_LENGTH + distance * distance) / (2.0 * distance)
+	var bend := Vector3(side * 0.25, -0.8, 0.35 * facing)
+	bend -= direction * bend.dot(direction)
+	if bend.length_squared() < 0.000001:
+		bend = direction.cross(Vector3.RIGHT)
+	var elbow := shoulder + direction * along + bend.normalized() * sqrt(maxf(0.0, UPPER_ARM_LENGTH * UPPER_ARM_LENGTH - along * along))
+	_paddle.position = grip + Vector3(0.0, 0.48, 0.0)
 	_connect_arm(_upper_arm, shoulder, elbow)
 	_connect_arm(_forearm, elbow, grip)
 	_hand.position = grip
 	_connect_arm(_free_arm, _body.transform * Vector3(-side * 0.43, 2.7, 0.0), _body.transform * Vector3(-side * 0.62, 1.7, -0.15))
 
 
-func _arm_piece(color: Color, radius: float) -> MeshInstance3D:
+func _arm_piece(color: Color, radius: float, length: float = 1.0) -> MeshInstance3D:
 	var shape := CapsuleMesh.new()
 	shape.radius = radius
-	shape.height = 1.0
+	shape.height = length
 	var arm := MeshInstance3D.new()
 	arm.mesh = shape
 	arm.material_override = _material(color)
@@ -137,7 +149,7 @@ func _arm_piece(color: Color, radius: float) -> MeshInstance3D:
 func _connect_arm(arm: MeshInstance3D, start: Vector3, end: Vector3) -> void:
 	var offset := end - start
 	arm.position = (start + end) * 0.5
-	arm.scale.y = offset.length()
+	arm.scale = Vector3.ONE
 	if offset.length_squared() > 0.000001:
 		arm.quaternion = Quaternion(Vector3.UP, offset.normalized())
 

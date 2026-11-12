@@ -9,8 +9,8 @@ const WIDTH := 12.0
 const LENGTH := 23.0
 const PLAYER_Z := 18.8
 const CONTACT_HEIGHT := 2.2
-const PADDLE_SIDE := 1.15
-const PADDLE_FORWARD := 1.1
+const PADDLE_SIDE := 0.95
+const PADDLE_FORWARD := 0.85
 const WALL_Z := 0.2
 const OUTBOUND_TIME := 0.72
 const NORMAL_BALL_SPEED := (PLAYER_Z - PADDLE_FORWARD - WALL_Z) / OUTBOUND_TIME
@@ -56,6 +56,7 @@ var paddle_height: float:
 	set(value):
 		_paddle_heights[active_player] = value
 var last_contact_pos := ball_pos
+var last_contact_offset := Vector3.ZERO
 var contact_age := 1.0
 var target_x := WIDTH * 0.5
 var receive_apex := Vector3(WIDTH * 0.5, BOUNCE_APEX, (BOUNCE_Z + LENGTH) * 0.5)
@@ -96,6 +97,7 @@ func reset() -> void:
 	last_feedback = ""
 	ball_pos = paddle_position()
 	last_contact_pos = ball_pos
+	last_contact_offset = ball_pos - player_position(active_player)
 	contact_age = 1.0
 
 
@@ -318,6 +320,7 @@ func _launch(power: float = 0.0, aim: Vector2 = Vector2.ZERO) -> void:
 	bounces = 0
 	last_feedback = "To the wall"
 	last_contact_pos = ball_pos
+	last_contact_offset = ball_pos - player_position(active_player)
 	last_hitter = active_player
 	contact_age = 0.0
 	shot_charge = clampf(power, 0.0, 1.0)

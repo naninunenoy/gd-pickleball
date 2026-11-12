@@ -13,21 +13,27 @@ Godot 4.7.2, Compatibility/WebGL 2, portrait reference viewport 432x864. `scenes
 
 ## Teams and formation
 
-Near indices are 0..player_count-1; the two opponents are player_count and player_count+1. A one-athlete near team uses center lane X=6, while pairs and both opponents use racket homes X=3/9. Dominant-hand offsets are 1.15 feet sideways and 1.1 feet forward, mirrored on the far side.
+Near indices are 0..player_count-1; the two opponents are player_count and player_count+1. A one-athlete near team uses center lane X=6, while pairs and both opponents use racket homes X=3/9. Dominant-hand offsets are 0.95 feet sideways and 0.85 feet forward, mirrored on the far side.
 
-The near team's selected home depth is Z=19.4 for kitchen or Z=22 for baseline. `_team_z` moves toward the current formation target at 16 ft/s and is assigned to every near athlete, so horizontal movement cannot desynchronize forward/backward motion. A kitchen-side dink pickup temporarily advances the whole team to Z=16; outgoing shots recover toward the chosen home line. Far athletes independently approach their selected contact or recover home (Z=1 for RALLY, Z=3.6 for VOLLEY).
+The near team's selected home depth is Z=16.6 for kitchen or Z=22 for baseline. `_team_z` moves toward the current formation target at 16 ft/s and is assigned to every near athlete, so horizontal movement cannot desynchronize forward/backward motion. A kitchen-side dink pickup temporarily advances the whole team to the predicted bounced contact; outgoing shots recover toward the chosen home line. Far athletes independently approach their selected contact or recover home (Z=1 for RALLY, Z=6.4 for VOLLEY).
 
 `set_court_line()` changes a target without mutating phase, ball, score or pending aim. Idle models also advance their formation, and a READY serve starts from actual current feet rather than resetting a move in progress. Both profiles expose the same always-available thumb button near the bottom; GUI input is consumed so a formation change cannot become a hit. During an owned shot gesture the formation button is disabled. Secondary/synthetic mouse input is suppressed after touch.
 
 Incoming course selects the near receiver and outgoing course selects one of two opponents. Center balls are shared with the partner. Lateral targets permit at most 0.5 feet of overlap into the other half. CPU returns crosscourt; return count never chooses a course.
 
+## Athlete proportions and kitchen scale
+
+The 12-by-23 court uses a 4.2-foot kitchen on each side of the net, reduced from 7 to match this compact playfield. The visible kitchen, lines, home positions and bounce targets use the same `KITCHEN_DEPTH` constant.
+
+Upper arm and forearm are each fixed at 0.95 feet. A two-segment elbow pose and lowered shoulders handle low pickups without stretching the arm meshes. Follow-through stores the hit relative to the feet so recovery movement does not pull the hand back toward an old world position.
+
 ## Flight and contact
 
 Positions use feet, with net Z=11.5 and height 2.85. Analytic arcs retain 0.25 feet of net clearance. Normal velocity uses 65% of the historical wall outbound reference (~15.8 ft/s), with per-return duration reduction 0.003 and a 0.9 floor. Overshoot is retained through 1/120-second integration steps.
 
-RALLY outgoing deep shots land at far Z=5.4 and rise to the actual CPU racket at height 2.65. The CPU returns to near Z=17.6, then BOUNCED runs toward Z=23 with a 2.65-foot peak. Both sides must collect the bounce. VOLLEY preserves its high unbounced trajectory, with incoming endpoint at the currently selected home depth. Unbounced contact requires feet outside the kitchen.
+RALLY outgoing deep shots land at far Z=8.2 and rise to the actual CPU racket at height 2.65. The CPU returns to near Z=14.8, then BOUNCED runs toward Z=23 with a 2.65-foot peak. Both sides must collect the bounce. VOLLEY preserves its high unbounced trajectory, with incoming endpoint at the currently selected home depth. Unbounced contact requires feet outside the kitchen. Both shot types require the ball within 0.45 feet of the racket. The team follows a predicted contact, including its height; after a bounce the target continues with the ball to accommodate a slightly late input. Automatic depth stays within 3.5 feet forward and 4 feet backward of the selected line, capped at one foot behind the baseline.
 
-Swipe displacement / 120 reference pixels retains magnitude after the 14-pixel deadzone. Magnitudes below 0.65 choose a dink, with a blue preview; longer swipes choose a deep stroke. Gesture duration never adds power. Dinks land 2.2 feet beyond the net, then rise to a contact 3.4 feet beyond it at height 1.9. The near bounce lasts 0.84 seconds and a pickup opens after 0.08 seconds. RALLY bounce duration is 1.15 seconds. Both are legal inside the kitchen after bouncing. Early input queues through the bounce and is consumed once at actual contact. A second bounce enters MISSED and cancels stale input.
+Swipe displacement / 120 reference pixels retains magnitude after the 14-pixel deadzone. Magnitudes below 0.65 choose a dink, with a blue preview; longer swipes choose a deep stroke. Gesture duration never adds power. Dinks land 2.2 feet beyond the net, then rise to a contact 3.0 feet beyond it at height 1.9. The near bounce lasts 0.84 seconds and a pickup opens after 0.08 seconds. RALLY bounce duration is 1.15 seconds. Both are legal inside the kitchen after bouncing. Early input queues through the bounce and is consumed once at actual contact. A second bounce enters MISSED and cancels stale input.
 
 ## Persistence and UI
 
@@ -44,3 +50,7 @@ Web checks use touch-enabled Chromium at 390x844 and 320x568. Verify all four at
 ## Web deployment
 
 Pushes to main run the Godot checks, single-threaded Web export, release-version checks and GitHub Pages deployment. Asset filenames are fingerprinted per release. A no-store `version.json` check reloads stale entry pages while retaining local records. The visible BUILD number is embedded in the loaded pack as the Actions run/attempt. Local previews set `APP_BUILD_ID` explicitly.
+
+### Proportion/contact regression checks
+
+Before implementation, the new kitchen-depth, close-contact and fixed-arm checks failed 13 assertions. The updated suite passes 3,405 assertions, including both hands, both drills, queued dinks and late bounced returns. Dink checks now wait for actual racket contact instead of expecting the former 2.8-foot reach to return the ball within 0.1 seconds. Scene checks verify the reduced kitchen mesh and legal racket positions. Native rendered screenshots cover overview, kitchen formation and low contact.

@@ -8,7 +8,9 @@ Use the large bottom button to choose **KITCHEN LINE** or **BASELINE** at any ti
 
 Tap anywhere else to serve or return on release. A short swipe plays a dink; a longer swipe plays a deep stroke. Left/right chooses the course and long up/down swipes lift/drive. There is no hold power. Early input waits for the legal contact, including the first bounce in RALLY or on a dink. Missing a second bounce ends that exchange. Opponents pick up short shots after their bounce and automatically return across the court.
 
-P1 covers the left half and P2 the right. The incoming course selects the receiver, with central balls shared with the partner. Horizontal footwork is automatic and stays within each player's territory; depth follows the common line choice. Real racket contacts trigger a flash and ring. The court camera stays fixed during line changes, receiver changes, hits and retries.
+P1 covers the left half and P2 the right. The incoming course selects the receiver, with central balls shared with the partner. Horizontal footwork is automatic and stays within each player's territory; depth follows the common line choice. Short fixed-length arms keep the racket close to the body, and the team follows bounced balls to a reachable contact instead of stretching toward them. Real racket contacts trigger a flash and ring. The court camera stays fixed during line changes, receiver changes, hits and retries.
+
+The kitchen is 4.2 feet deep per side to fit the compact 12-by-23 court. Its lines, athlete positions and contact rules share that scale.
 
 All game text is English. Click or Space / Enter uses the same gesture on desktop. P / Escape pauses and R resets. Leaving the app pauses an active rally. The two drills retain separate saved personal bests.
 

@@ -123,7 +123,10 @@ func _check_dinks() -> void:
 			rally.advance(rally._duration)
 			_expect(rally.phase == WallRally.Phase.BOUNCED and rally.returns == 0 and rally.has_queued_shot(), "early tap waits through the near-side bounce")
 			_expect(is_equal_approx(rally.player_position(0).z, rally.player_position(1).z) and rally.inside_kitchen(0) and rally.inside_kitchen(1), "both advance together for a short kitchen pickup")
-			rally.advance(0.1)
+			for frame in range(120):
+				if rally.returns == 1 or rally.phase == WallRally.Phase.MISSED:
+					break
+				rally.advance(1.0 / 120.0)
 			_expect(rally.returns == 1 and rally.last_contact_pos.y > VolleyRally.BALL_RADIUS, "normal tap returns the dink after its bounce")
 			_expect(rally.dink_shot == not ground, "volley taps keep dinking and rally taps resume deep strokes")
 			rally.cancel_charge()
@@ -137,8 +140,35 @@ func _check_dinks() -> void:
 	volley.tap()
 	_to_cpu(volley)
 	_until_return(volley)
-	volley.player_pos.z = volley.ball_pos.z + WallRally.PADDLE_FORWARD
+	volley.player_pos.z = VolleyRally.NET_Z + VolleyRally.KITCHEN_DEPTH
+	volley.ball_pos = volley.paddle_position()
 	_expect(volley.inside_kitchen(volley.active_player) and not volley.can_return(), "unbounced kitchen volleys remain illegal")
+
+
+func _check_natural_contacts() -> void:
+	_expect(is_equal_approx(VolleyRally.KITCHEN_DEPTH, 4.2), "kitchen depth matches the compact court scale")
+	for ground in [false, true]:
+		for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+			var rally := _model(ground, 2, true, hand)
+			rally.tap()
+			_until_return(rally)
+			_expect(rally.can_return() and rally.ball_pos.distance_to(rally.paddle_position()) <= 0.45, "return opens only when the ball reaches the racket")
+			if ground:
+				rally.advance(0.15)
+				rally.tap()
+				for frame in range(240):
+					if rally.returns == 1 or rally.phase == WallRally.Phase.MISSED:
+						break
+					rally.advance(1.0 / 120.0)
+				_expect(rally.returns == 1, "bounced balls remain playable after a slightly late input")
+			var athlete := Athlete.new()
+			root.add_child(athlete)
+			athlete.sync_practice(rally, 0.0, rally.active_player)
+			if rally.last_hitter != rally.active_player or rally.contact_age >= Athlete.FOLLOW_THROUGH:
+				_expect(athlete.paddle_contact_position().distance_to(rally.paddle_position()) < 0.002, "short arms render the prepared legal racket without clipping the reach")
+			for arm in [athlete._upper_arm, athlete._forearm]:
+				_expect(is_equal_approx(arm.mesh.height, 0.95) and arm.scale.is_equal_approx(Vector3.ONE), "striking arms stay short instead of stretching toward the ball")
+			athlete.free()
 
 
 func _check_scene() -> void:
@@ -159,6 +189,11 @@ func _check_scene() -> void:
 	for mesh in scene.court.find_children("*", "MeshInstance3D", true, false):
 		if mesh.mesh is BoxMesh and mesh.mesh.size.y > 4.0:
 			no_wall = false
+	var kitchen_size := Vector3.ZERO
+	for mesh in scene.court._volley_root.get_children():
+		if mesh is MeshInstance3D and mesh.mesh is BoxMesh and mesh.material_override.albedo_color.is_equal_approx(Color("31745f")):
+			kitchen_size = mesh.mesh.size
+	_expect(is_equal_approx(kitchen_size.z, 8.4), "visible kitchen uses the same reduced depth as the contact rules")
 	_expect(no_wall and scene.court._volley_root.visible, "the practice wall is removed and the net is active")
 	_expect(scene.hud.line_button.visible and scene.hud.line_button.size.y >= 44.0, "large line switch is available near the bottom of the phone")
 	var old_depth: float = scene.rally.player_position(0).z
@@ -211,7 +246,7 @@ func _check_scene() -> void:
 	_touch(Vector2(216, 745), false)
 	await process_frame
 	_expect(not scene.rally.kitchen_line and scene.rally.phase == WallRally.Phase.READY, "volley also switches both players to the baseline without serving")
-	scene.rally.advance(0.3)
+	scene.rally.advance(0.5)
 	_expect(is_equal_approx(scene.rally.player_position(0).z, VolleyRally.BASELINE_HOME_Z) and is_equal_approx(scene.rally.player_position(1).z, VolleyRally.BASELINE_HOME_Z), "both reach the baseline together in volley practice")
 	scene._change_game_mode(false)
 	_expect(not scene.rally.kitchen_line and scene.rally.best == 1, "rally line preference and record are restored separately")
@@ -248,6 +283,7 @@ func _run() -> void:
 	_check_rallies()
 	_check_line_changes()
 	_check_dinks()
+	_check_natural_contacts()
 	await _check_scene()
 	print("check_slice: %d checks, %d failed" % [checks, failures])
 	quit(1 if failures > 0 else 0)
