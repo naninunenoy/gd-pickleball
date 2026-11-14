@@ -145,6 +145,48 @@ func _check_dinks() -> void:
 	_expect(volley.inside_kitchen(volley.active_player) and not volley.can_return(), "unbounced kitchen volleys remain illegal")
 
 
+func _check_baseline_bounces() -> void:
+	for ground in [false, true]:
+		for count in [1, 2]:
+			for hand in [WallRally.Hand.RIGHT, WallRally.Hand.LEFT]:
+				var rally := _model(ground, count, false, hand)
+				rally.tap()
+				_to_cpu(rally)
+				_expect(rally._to.z > VolleyRally.NET_Z and rally._to.z < WallRally.LENGTH and is_equal_approx(rally._to.y, VolleyRally.BALL_RADIUS), "opponent shots land inside the court before the baseline")
+				rally.tap()
+				var net_progress := (VolleyRally.NET_Z - rally._from.z) / (rally._to.z - rally._from.z)
+				rally.advance(rally._duration * net_progress)
+				_expect(rally.ball_pos.y >= VolleyRally.NET_HEIGHT + VolleyRally.NET_CLEARANCE - 0.001 and rally.returns == 0, "baseline shots cross above the net before descending")
+				rally.advance(rally._duration * 0.85 - rally.phase_time)
+				var falling_height := rally.ball_pos.y
+				rally.advance(rally._duration * 0.05)
+				_expect(rally.ball_pos.y < falling_height and rally.returns == 0, "baseline shots descend toward the court instead of floating to a racket")
+				rally.advance(rally._duration - rally.phase_time)
+				_expect(rally.phase == WallRally.Phase.BOUNCED and rally.bounces == 1 and rally.returns == 0 and rally.has_queued_shot(), "baseline input waits for one bounce in both drills")
+				_expect(rally._to.z > WallRally.LENGTH, "a deep bounced ball continues past the baseline instead of stopping there")
+				for frame in range(240):
+					if rally.returns == 1 or rally.phase == WallRally.Phase.MISSED:
+						break
+					rally.advance(1.0 / 120.0)
+				_expect(rally.returns == 1 and rally.last_contact_pos.z > VolleyRally.KITCHEN_HOME_Z and not rally.dink_shot, "baseline tap returns the rising ball as a deep stroke")
+	var volley := _model(false, 2, true)
+	volley.tap()
+	_until_return(volley)
+	_expect(volley.phase == WallRally.Phase.RETURNING and volley.bounces == 0, "kitchen-line players can still volley an ordinary incoming shot")
+	var missed := _model(false, 2, true)
+	missed.tap()
+	_to_cpu(missed)
+	var landing := missed._to
+	missed.set_court_line(false)
+	_expect(missed._to == landing, "retreating after the opponent hits does not retarget the flying ball")
+	missed.press()
+	missed.advance(missed._duration)
+	_expect(missed.phase == WallRally.Phase.BOUNCED and missed.bounces == 1, "holding a gesture cannot suspend a ball above its landing")
+	missed.cancel_charge()
+	missed.advance(5.0)
+	_expect(missed.phase == WallRally.Phase.MISSED and missed.bounces == 2, "a missed volley continues to a first and second bounce")
+
+
 func _check_natural_contacts() -> void:
 	_expect(is_equal_approx(VolleyRally.KITCHEN_DEPTH, 4.2), "kitchen depth matches the compact court scale")
 	for ground in [false, true]:
@@ -283,6 +325,7 @@ func _run() -> void:
 	_check_rallies()
 	_check_line_changes()
 	_check_dinks()
+	_check_baseline_bounces()
 	_check_natural_contacts()
 	await _check_scene()
 	print("check_slice: %d checks, %d failed" % [checks, failures])
